@@ -34,4 +34,11 @@ window.APP_CONFIG = {
 
   // 팀 현황 화면 자동 새로고침 간격(초). 0이면 끔
   AUTO_REFRESH_SEC: 60,
+
+  // 팀장용 과제관리 대시보드 (dashboard/ 폴더)
+  DASHBOARD: {
+    TAB_IN_MAIN_APP: true, // false면 일반 화면에서 대시보드 탭을 숨김 (dashboard/index.html 단독 페이지는 그대로 사용)
+    STALL_WORKDAYS: 5, // 진행율이 이 근무일 수 이상 그대로면 '정체'
+    DEFAULT_WEEKS: 8, // 처음 보여줄 기간(주)
+  },
 };

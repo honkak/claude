@@ -4,7 +4,7 @@
  * goodocs 어댑터와 똑같은 함수(list/create/update/remove)를 제공한다.
  */
 (function (DR) {
-  const KEY = 'dr-mock-rows-v7';
+  const KEY = 'dr-mock-rows-v9';
   let rows = null;
 
   // 예시 업무: [분야(참고용), 제목, 내용]
@@ -55,7 +55,7 @@
       const owners = rand() < 0.3 && mates.length ? [author, pick(rand, mates)] : [author];
       const taskId = DR.nextTaskId(partOf[author], usedIds, DR.parseDate(date));
       usedIds.push(taskId);
-      return { taskId, part: partOf[author], title, content, owners: owners.join(', '), p: 10 * (1 + Math.floor(rand() * 3)), note: pick(rand, NOTES) };
+      return { taskId, part: partOf[author], title, content, owners: owners.join(', '), p: 10 * (1 + Math.floor(rand() * 3)), note: pick(rand, NOTES), stuck: rand() < 0.1 };
     };
     days.forEach((date) => {
       cfg.MEMBERS.forEach((author) => {
@@ -64,7 +64,8 @@
         if (rand() < 0.06) return; // 가끔 미제출
         const at = new Date(DR.parseDate(date).setHours(16 + Math.floor(rand() * 3), Math.floor(rand() * 60))).toISOString();
         list.forEach((t) => {
-          t.p = Math.min(100, t.p + 10 * Math.floor(rand() * 4));
+          // 일부 과제는 한동안 진행율이 멈춰 있는 예시 (대시보드의 '정체' 확인용)
+          if (!t.stuck || rand() < 0.2) t.p = Math.min(100, t.p + 10 * Math.floor(rand() * 4));
           out.push({
             id: 'm-' + out.length,
             taskId: t.taskId,

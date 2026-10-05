@@ -3,7 +3,7 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-  const store = cfg.STORE === 'goodocs' ? DR.createGoodocsStore() : DR.createMockStore();
+  const store = DR.createStore();
 
   // 구성원이 입력하는 칸 (저장·비교·내보내기에 공통 사용)
   const FIELDS = ['taskId', 'part', 'title', 'content', 'progress', 'note', 'owners'];
@@ -36,22 +36,9 @@
     $('#member-list').innerHTML = knownNames().map((m) => `<option value="${DR.esc(m)}">`).join('');
   }
 
-  const byTime = (a, b) => String(a.createdAt).localeCompare(String(b.createdAt));
+  // 데이터 해석 규칙은 js/model.js에서 (팀장 대시보드와 공유)
+  const { byTime, percentOf, isDone, splitOwners, ownersOf, NO_PART, partOf, partList, byOwner } = DR.model;
   const isBlank = (r) => !r.title.trim() && !r.content.trim();
-  // 진행율은 자유입력. 숫자로 읽히면(예: 70, 70%) 막대도 그린다
-  const percentOf = (v) => {
-    const m = String(v ?? '').trim().match(/^(\d{1,3})\s*%?$/);
-    return m ? Math.min(100, Number(m[1])) : /완료/.test(v) ? 100 : null;
-  };
-  const isDone = (v) => percentOf(v) === 100;
-  // 담당자는 '김민준, 이서연'처럼 쉼표로 이어 저장한다. 비어 있으면 작성자가 담당자
-  const splitOwners = (s) => [...new Set(String(s ?? '').split(/[,，;/]/).map((x) => x.trim()).filter(Boolean))];
-  const ownersOf = (r) => {
-    const list = splitOwners(r.owners);
-    return list.length ? list : r.author ? [r.author] : [];
-  };
-  const NO_PART = '파트 미지정';
-  const partOf = (r) => String(r.part ?? '').trim() || NO_PART;
   // 내가 작성했거나 담당자로 들어간 과제 → 내 입력 화면에 보이고 수정할 수 있다
   const involves = (r, name = state.me) => r.author === name || ownersOf(r).includes(name);
   const tagId = (id) => (id ? `#${id}` : '');
@@ -64,11 +51,39 @@
     state.tab = tab;
     DR.storage.set('dr-tab', tab);
     $$('.tabs [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
-    $('#view-input').hidden = tab !== 'input';
-    $('#view-leader').hidden = tab !== 'leader';
+    $$('.app > .view').forEach((v) => (v.hidden = v.id !== `view-${tab}`));
     if (tab === 'leader') loadLeader();
-    else autosizeAll();
+    else if (tab === 'input') autosizeAll();
+    else extraTabs.get(tab)?.show?.();
   }
+
+  /* ── 바깥 모듈이 탭을 붙이는 자리 (예: dashboard/dashboard.js) ──
+   * 기본 화면은 이 모듈들을 몰라도 동작한다. 모듈 스크립트를 빼면 탭도 사라진다.
+   * DR.registerTab({ id, label, mount(viewEl, { store, cfg }), show() })
+   */
+  const savedTab = DR.storage.get('dr-tab', 'input');
+  const extraTabs = new Map();
+  DR.registerTab = ({ id, label, mount, show }) => {
+    if (extraTabs.has(id) || $(`#view-${id}`)) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.setAttribute('role', 'tab');
+    btn.id = `tab-${id}`;
+    btn.dataset.tab = id;
+    btn.textContent = label;
+    btn.setAttribute('aria-selected', 'false');
+    btn.onclick = () => setTab(id);
+    $('.tabs').appendChild(btn);
+    const view = document.createElement('main');
+    view.id = `view-${id}`;
+    view.className = 'view';
+    view.setAttribute('role', 'tabpanel');
+    view.hidden = true;
+    $('.app').appendChild(view);
+    extraTabs.set(id, { show });
+    mount(view, { store, cfg });
+    if (savedTab === id) setTab(id);
+  };
 
   function showError(err) {
     console.error(err);
@@ -716,12 +731,6 @@
     return { from: days[0], to: days[4] };
   }
 
-  // 설정의 파트 순서 + 설정에 없는 파트 + 파트 미지정
-  function partList(rows) {
-    const used = [...new Set(rows.map(partOf))];
-    const extra = used.filter((p) => !cfg.PARTS.includes(p) && p !== NO_PART).sort();
-    return [...cfg.PARTS, ...extra, ...(used.includes(NO_PART) ? [NO_PART] : [])];
-  }
 
   // 보고에 이름이 나온 사람(작성자 + 담당자). 모든 사람이 따로 쓸 필요는 없다
   const peopleIn = (rows) => {
@@ -729,12 +738,6 @@
     return [...cfg.MEMBERS.filter((m) => set.has(m)), ...[...set].filter((m) => !cfg.MEMBERS.includes(m)).sort()];
   };
 
-  // 같은 파트 안에서는 담당자 순(설정의 팀원 순서) → 작성 순
-  const memberRank = (r) => {
-    const i = cfg.MEMBERS.indexOf(ownersOf(r)[0]);
-    return i < 0 ? 999 : i;
-  };
-  const byOwner = (a, b) => memberRank(a) - memberRank(b) || byTime(a, b);
 
   async function loadLeader() {
     const ld = state.ld;
@@ -1037,7 +1040,7 @@
     $$('.tabs [data-tab]').forEach((b) => (b.onclick = () => setTab(b.dataset.tab)));
     bindInput();
     bindLeader();
-    setTab(state.tab === 'leader' ? 'leader' : 'input');
+    setTab(savedTab === 'leader' ? 'leader' : 'input'); // 바깥 모듈 탭은 등록될 때 복원
     loadMine();
     renderMeChip();
     if (!state.me) openMeDialog(); // 처음 접속: 어느 탭이든 이름부터 묻는다

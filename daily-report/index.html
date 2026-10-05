@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>팀 일일업무보고</title>
 <link rel="stylesheet" href="css/style.css">
+<!-- [팀장용 대시보드] 분리할 때 이 줄과 아래 dashboard.js 줄을 지우면 됩니다 -->
+<link rel="stylesheet" href="dashboard/dashboard.css">
 </head>
 <body>
 <div class="app">
@@ -186,9 +188,12 @@
 
 <script src="js/config.js"></script>
 <script src="js/util.js"></script>
+<script src="js/model.js"></script>
 <script src="js/store-mock.js"></script>
 <script src="js/store-goodocs.js"></script>
 <script src="js/xlsx.js"></script>
 <script src="js/app.js"></script>
+<!-- [팀장용 대시보드] 대시보드 탭 (dashboard/ 폴더의 독립 모듈) -->
+<script src="dashboard/dashboard.js"></script>
 </body>
 </html>
