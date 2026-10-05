@@ -53,6 +53,16 @@ window.DR = window.DR || {};
 
   DR.tmpId = () => 'tmp-' + Math.random().toString(36).slice(2, 10);
 
+  // 과제번호: 헷갈리는 글자(0/O, 1/I/L)를 뺀 5자리. 예) T7K3F
+  const ID_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+  DR.taskId = () => {
+    let s = 'T';
+    const buf = new Uint32Array(5);
+    (window.crypto || {}).getRandomValues ? crypto.getRandomValues(buf) : buf.forEach((_, i) => (buf[i] = Math.random() * 1e9));
+    buf.forEach((n) => (s += ID_CHARS[n % ID_CHARS.length]));
+    return s;
+  };
+
   // 브라우저 저장소가 막혀 있어도(사생활 보호 모드 등) 앱은 동작해야 한다
   DR.storage = {
     get(key, fallback) {

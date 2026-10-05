@@ -4,7 +4,7 @@
  * goodocs 어댑터와 똑같은 함수(list/create/update/remove)를 제공한다.
  */
 (function (DR) {
-  const KEY = 'dr-mock-rows-v4';
+  const KEY = 'dr-mock-rows-v5';
   let rows = null;
 
   // 예시 업무: [분야(참고용), 제목, 내용]
@@ -52,7 +52,7 @@
       const [, title, content] = pick(rand, TASKS);
       const mates = cfg.MEMBERS.filter((m) => m !== author && partOf[m] === partOf[author]);
       const owners = rand() < 0.3 && mates.length ? [author, pick(rand, mates)] : [author];
-      return { part: partOf[author], title, content, owners: owners.join(', '), p: 10 * (1 + Math.floor(rand() * 3)), note: pick(rand, NOTES) };
+      return { taskId: DR.taskId(), part: partOf[author], title, content, owners: owners.join(', '), p: 10 * (1 + Math.floor(rand() * 3)), note: pick(rand, NOTES) };
     };
     days.forEach((date) => {
       cfg.MEMBERS.forEach((author) => {
@@ -64,8 +64,10 @@
           t.p = Math.min(100, t.p + 10 * Math.floor(rand() * 4));
           out.push({
             id: 'm-' + out.length,
+            taskId: t.taskId,
             date,
             author,
+            editor: author,
             part: t.part,
             title: t.title,
             content: t.content,
@@ -91,13 +93,13 @@
     return out;
   }
 
+  // 다른 탭(=다른 사람 역할)에서 저장한 내용도 보이도록 매번 저장소에서 다시 읽는다
   function load() {
+    const saved = DR.storage.get(KEY, null);
+    if (saved) rows = saved;
     if (!rows) {
-      rows = DR.storage.get(KEY, null);
-      if (!rows) {
-        rows = seed();
-        persist();
-      }
+      rows = seed();
+      persist();
     }
     return rows;
   }

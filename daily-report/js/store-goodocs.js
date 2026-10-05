@@ -41,6 +41,7 @@
    * goodocs 시트 1행(머리글)에 아래 열 이름을 그대로 만들어 두세요.
    */
   const COLUMNS = {
+    taskId: '과제번호', // 같은 과제는 날짜가 달라도 같은 번호
     date: '날짜',
     author: '작성자',
     part: '소속파트',
@@ -49,6 +50,7 @@
     progress: '진행율', // 자유입력 문자열 (예: 70%, 완료)
     note: '비고',
     owners: '담당자', // 여러 명이면 쉼표로 구분 (예: 김민준, 이서연)
+    editor: '수정자', // 마지막으로 저장한 사람
     createdAt: '작성시각',
     updatedAt: '수정시각',
   };
@@ -75,7 +77,7 @@
     const values = rec.values || rec;
     const row = { id: String(rec.rowId ?? rec.id ?? rec._id) };
     for (const [field, col] of Object.entries(COLUMNS)) row[field] = values[col] ?? '';
-    for (const f of ['part', 'title', 'content', 'progress', 'note', 'owners']) row[f] = String(row[f]);
+    for (const f of ['taskId', 'part', 'title', 'content', 'progress', 'note', 'owners', 'editor']) row[f] = String(row[f]);
     row.date = normalizeDate(row.date);
     return row;
   }

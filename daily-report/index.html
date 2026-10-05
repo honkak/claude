@@ -125,6 +125,24 @@
   </form>
 </div>
 
+<div id="conflict" class="dialog-backdrop" hidden>
+  <div class="dialog conflict" role="alertdialog" aria-modal="true" aria-labelledby="cf-title">
+    <h2 id="cf-title"></h2>
+    <p id="cf-sub" class="meta"></p>
+    <div class="cf-wrap">
+      <table class="cf-table">
+        <thead><tr><th>항목</th><th>내가 쓴 것</th><th id="cf-their-h"></th></tr></thead>
+        <tbody id="cf-body"></tbody>
+      </table>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="btn" data-cf="cancel">저장 취소</button>
+      <button type="button" class="btn" data-cf="theirs">동료 것 유지</button>
+      <button type="button" class="btn primary" data-cf="mine">내 것으로 반영</button>
+    </div>
+  </div>
+</div>
+
 <div id="loader" class="dialog-backdrop" hidden>
   <div class="dialog loader" role="dialog" aria-modal="true" aria-labelledby="loader-title">
     <header class="loader-head">

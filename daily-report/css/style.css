@@ -256,7 +256,7 @@ input:disabled, select:disabled { background: var(--surface-2); color: var(--fg)
 .entries { display: grid; }
 .entry {
   display: grid;
-  grid-template-columns: 28px 104px minmax(0, 1fr) minmax(0, 1.5fr) 90px minmax(0, 0.7fr) 150px 34px;
+  grid-template-columns: 60px 100px minmax(0, 1fr) minmax(0, 1.5fr) 90px minmax(0, 0.7fr) 150px 34px;
   gap: 6px;
   align-items: start;
   padding-block: 8px;
@@ -363,6 +363,27 @@ select.unset { color: var(--muted); }
 .setup-row { display: flex; gap: 8px; margin-top: 8px; }
 .setup-row input { width: 200px; }
 .ok { color: var(--accent); font-weight: 700; }
+
+/* 과제번호 · 공동 과제 */
+.entry-no small.tid { color: var(--muted); font-family: var(--font-num); font-size: 10px; }
+.entry-no small { white-space: nowrap; }
+.entry-no small.by { color: var(--plan); }
+.sheet td.tid-cell { width: 1%; white-space: nowrap; font-family: var(--font-num); font-size: 11px; color: var(--muted); }
+.sheet td.time small { display: block; font-family: var(--font-ui); font-size: 11px; }
+
+/* 충돌 비교 */
+.dialog.conflict { width: min(860px, 100%); max-height: min(88vh, 900px); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 10px; }
+.conflict h2 { margin: 0; font-size: 16px; color: var(--warn); }
+.conflict .meta { margin: 0; }
+.cf-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+.cf-table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 13px; }
+.cf-table th, .cf-table td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+.cf-table thead th { background: var(--surface-2); position: sticky; top: 0; }
+.cf-table tbody th { width: 80px; color: var(--muted); white-space: nowrap; }
+.cf-table td { width: 45%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cf-table tr.diff td { background: var(--warn-soft); }
+.cf-table tr.diff th { color: var(--warn); }
+.conflict .dialog-actions { flex-wrap: wrap; }
 
 /* 지난 업무 불러오기 */
 .dialog.loader {
@@ -567,7 +588,7 @@ select.unset { color: var(--muted); }
 @media (max-width: 640px) {
   .me-chip { margin-left: 0; }
   .entry-head { display: none; }
-  .entry { grid-template-columns: 28px minmax(0, 1fr) 96px 34px; }
+  .entry { grid-template-columns: 52px minmax(0, 1fr) 96px 34px; }
   .entry-no { grid-column: 1; grid-row: 1; }
   .entry .c-part { grid-column: 2; grid-row: 1; }
   .entry .c-progress { grid-column: 3; grid-row: 1; }

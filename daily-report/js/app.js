@@ -6,7 +6,7 @@
   const store = cfg.STORE === 'goodocs' ? DR.createGoodocsStore() : DR.createMockStore();
 
   // 구성원이 입력하는 칸 (저장·비교·내보내기에 공통 사용)
-  const FIELDS = ['part', 'title', 'content', 'progress', 'note', 'owners'];
+  const FIELDS = ['taskId', 'part', 'title', 'content', 'progress', 'note', 'owners'];
 
   const state = {
     tab: DR.storage.get('dr-tab', 'input'),
@@ -52,6 +52,9 @@
   };
   const NO_PART = '파트 미지정';
   const partOf = (r) => String(r.part ?? '').trim() || NO_PART;
+  // 내가 작성했거나 담당자로 들어간 과제 → 내 입력 화면에 보이고 수정할 수 있다
+  const involves = (r, name = state.me) => r.author === name || ownersOf(r).includes(name);
+  const tagId = (id) => (id ? `#${id}` : '');
 
   /* ───────────── 공통 ───────────── */
 
@@ -154,7 +157,9 @@
       : `<button type="button" class="done-btn" data-done aria-pressed="${done}">${done ? '✓ 완료됨' : '완료'}</button>`;
     const cls = ['entry', r.carried ? 'carried' : '', done ? 'is-done' : ''].join(' ');
     return `<div class="${cls}" data-id="${r.id}">
-      <span class="entry-no">${i + 1}${r.carried ? '<small>이월</small>' : ''}</span>
+      <span class="entry-no">${i + 1}<small class="tid">${DR.esc(tagId(r.taskId))}</small>${r.carried ? '<small>이월</small>' : ''}${
+        !r.id.startsWith('tmp-') && r.editor && r.editor !== state.me ? `<small class="by">${DR.esc(r.editor)} 수정</small>` : ''
+      }</span>
       <label class="cell c-part"><span class="cell-label">소속파트</span>${partSelect(r.part, dis)}</label>
       ${area('title', '제목', '업무 제목 (여러 줄 가능)', 3)}
       ${area('content', '내용', '세부 내용', 3)}
@@ -194,7 +199,6 @@
     updateSavebar();
   }
 
-  // 새 행의 소속파트는 직전에 쓴 파트로 미리 채운다
   // 새 행의 소속파트: 저장해 둔 내 파트 → 없으면 직전 행의 파트
   const lastPart = () => state.myPart || [...state.draft].reverse().find((r) => r.part.trim())?.part || '';
 
@@ -209,15 +213,23 @@
     note: '',
     owners: state.me,
     ...fill,
+    taskId: fill.taskId || DR.taskId(),
   });
 
-  // 오늘 보고가 비어 있으면, 가장 최근 보고의 미완료 업무를 회색(이월)으로 띄운다
+  // 오늘 내 보고가 아직 없으면, 가장 최근 보고의 미완료 과제를 회색(이월)으로 띄운다.
+  // 내가 담당자인 공동 과제도 포함하되, 오늘 이미 누가 올린 과제(같은 번호)는 뺀다
   async function carryOver() {
     const from = DR.addDays(state.inDate, -cfg.CARRY_LOOKBACK_DAYS);
-    const prev = await store.list({ from, to: DR.addDays(state.inDate, -1), author: state.me });
+    const prev = (await store.list({ from, to: DR.addDays(state.inDate, -1) })).filter((r) => involves(r));
     if (!prev.length) return;
     const last = prev.reduce((m, r) => (r.date > m ? r.date : m), '');
-    const open = prev.filter((r) => r.date === last && !isDone(r.progress)).sort(byTime);
+    const have = new Set(state.draft.map((r) => r.taskId).filter(Boolean));
+    const open = [];
+    for (const r of prev.filter((x) => x.date === last && !isDone(x.progress)).sort(byTime)) {
+      if (r.taskId && have.has(r.taskId)) continue;
+      if (r.taskId) have.add(r.taskId);
+      open.push(r);
+    }
     if (!open.length) return;
     state.carryFrom = last;
     open.forEach((r) => state.draft.push(blank({ ...clean(r), carried: true })));
@@ -227,11 +239,13 @@
     state.carryFrom = null;
     if (!state.me) return renderInput();
     try {
-      const rows = await store.list({ from: state.inDate, to: state.inDate, author: state.me });
+      const rows = (await store.list({ from: state.inDate, to: state.inDate })).filter((r) => involves(r));
       rows.sort(byTime);
+      // 예전 데이터에 과제번호가 없으면 붙여 둔다 (다음 저장 때 함께 기록됨)
+      rows.forEach((r) => r.taskId || (r.taskId = DR.taskId()));
       state.server = rows;
       state.draft = rows.map((r) => ({ ...r }));
-      if (editable() && !rows.length) await carryOver();
+      if (editable() && !rows.some((r) => r.author === state.me)) await carryOver();
       if (editable() && !state.draft.length) state.draft.push(blank());
     } catch (e) {
       state.server = [];
@@ -248,6 +262,44 @@
     $(`[data-id="${r.id}"] [data-f="title"]`)?.focus();
   }
 
+  const CMP_FIELDS = [
+    ['part', '소속파트'],
+    ['title', '제목'],
+    ['content', '내용'],
+    ['progress', '진행율'],
+    ['note', '비고'],
+    ['owners', '담당자'],
+  ];
+  const sameContent = (a, b) => CMP_FIELDS.every(([f]) => String(a[f] ?? '').trim() === String(b[f] ?? '').trim());
+
+  // 같은 과제를 동료가 먼저 올렸거나 그사이 고쳤을 때: 나란히 비교하고 고르게 한다
+  function resolveConflict(c, i, n) {
+    const dlg = $('#conflict');
+    const who = c.theirs.editor || c.theirs.author;
+    $('#cf-title').textContent = `같은 과제를 ${who}님이 ${c.kind === 'create' ? '먼저 등록했습니다' : '그사이 수정했습니다'}${n > 1 ? ` (${i + 1}/${n})` : ''}`;
+    $('#cf-sub').textContent = `${tagId(c.theirs.taskId)} · ${who}님이 ${DR.fmtTime(c.theirs.updatedAt || c.theirs.createdAt)}에 저장. 어느 쪽 내용을 남길지 고르세요. 다른 칸은 색으로 표시됩니다.`;
+    $('#cf-their-h').textContent = `${who}님이 쓴 것`;
+    $('#cf-body').innerHTML = CMP_FIELDS.map(([f, label]) => {
+      const a = String(c.mine[f] ?? '').trim();
+      const b = String(c.theirs[f] ?? '').trim();
+      return `<tr class="${a === b ? '' : 'diff'}"><th>${label}</th><td>${DR.esc(a) || '<span class="muted">(비어 있음)</span>'}</td><td>${
+        DR.esc(b) || '<span class="muted">(비어 있음)</span>'
+      }</td></tr>`;
+    }).join('');
+    dlg.hidden = false;
+    dlg.querySelector('[data-cf="mine"]').focus();
+    return new Promise((resolve) => {
+      dlg.onclick = (e) => {
+        const act = e.target.closest('[data-cf]')?.dataset.cf;
+        if (!act) return;
+        dlg.hidden = true;
+        dlg.onclick = dlg.onkeydown = null;
+        resolve(act);
+      };
+      dlg.onkeydown = (e) => e.key === 'Escape' && dlg.querySelector('[data-cf="cancel"]').click();
+    });
+  }
+
   async function save() {
     if (!editable() || state.saving) return;
     const { creates, updates, removes, count } = diff();
@@ -255,10 +307,52 @@
     state.saving = true;
     updateSavebar();
     try {
-      if (creates.length) await store.create(creates.map((r) => ({ date: state.inDate, author: state.me, ...clean(r) })));
-      for (const r of updates) await store.update(r.id, clean(r));
-      for (const id of removes) await store.remove(id);
-      DR.toast('저장했습니다.');
+      // 저장 직전에 오늘 보고를 다시 읽어, 같은 과제번호나 그사이 바뀐 행이 있는지 확인
+      const fresh = await store.list({ from: state.inDate, to: state.inDate });
+      const freshById = new Map(fresh.map((r) => [r.id, r]));
+      const freshByTask = new Map(fresh.filter((r) => r.taskId).map((r) => [r.taskId, r]));
+      const loadedById = new Map(state.server.map((r) => [r.id, r]));
+      const toCreate = [];
+      const toUpdate = []; // [id, row]
+      const conflicts = [];
+      for (const d of creates) {
+        const other = freshByTask.get(d.taskId);
+        if (!other) toCreate.push(d);
+        else if (!sameContent(d, other)) conflicts.push({ kind: 'create', mine: d, theirs: other });
+      }
+      for (const d of updates) {
+        const cur = freshById.get(d.id);
+        if (!cur) toCreate.push(d); // 그사이 누가 지웠으면 새로 올린다
+        else if (cur.updatedAt !== loadedById.get(d.id)?.updatedAt && !sameContent(d, cur))
+          conflicts.push({ kind: 'update', mine: d, theirs: cur });
+        else toUpdate.push([d.id, d]);
+      }
+      let skippedRemoves = 0;
+      const toRemove = removes.filter((id) => {
+        const cur = freshById.get(id);
+        if (!cur) return false;
+        const changed = cur.updatedAt !== loadedById.get(id)?.updatedAt;
+        if (changed) skippedRemoves++;
+        return !changed; // 그사이 동료가 고친 과제는 지우지 않는다
+      });
+
+      for (let i = 0; i < conflicts.length; i++) {
+        const c = conflicts[i];
+        const pick = await resolveConflict(c, i, conflicts.length);
+        if (pick === 'cancel') {
+          DR.toast('저장을 취소했습니다. 입력한 내용은 화면에 그대로 있습니다.', 'warn');
+          return;
+        }
+        if (pick === 'mine') toUpdate.push([c.theirs.id, c.mine]);
+        // 'theirs': 내 것은 버리고 동료 것을 그대로 둔다
+      }
+
+      const stamp = { editor: state.me };
+      if (toCreate.length)
+        await store.create(toCreate.map((r) => ({ date: state.inDate, author: state.me, ...clean(r), ...stamp })));
+      for (const [id, r] of toUpdate) await store.update(id, { ...clean(r), ...stamp });
+      for (const id of toRemove) await store.remove(id);
+      DR.toast(skippedRemoves ? `저장했습니다. 동료가 그사이 수정한 과제 ${skippedRemoves}건은 지우지 않았습니다.` : '저장했습니다.');
       await loadMine();
     } catch (e) {
       showError(e);
@@ -338,7 +432,7 @@
       // 같은 사람의 같은 업무는 여러 날 반복되므로, 가장 최근 것 하나만 남긴다
       const latest = new Map();
       for (const r of mine) {
-        const k = `${r.author}|${r.title.trim()}|${r.part.trim()}`;
+        const k = r.taskId || `${r.author}|${r.title.trim()}|${r.part.trim()}`;
         const cur = latest.get(k);
         if (!cur || r.date > cur.date) latest.set(k, r);
       }
@@ -353,7 +447,7 @@
       const all = await fetchLoaderRows();
       const words = $('#ldr-q').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
       const hit = (r) => {
-        const hay = `${r.part} ${r.title} ${r.content} ${r.note} ${ownersOf(r).join(' ')}`.toLowerCase();
+        const hay = `${r.taskId} ${r.part} ${r.title} ${r.content} ${r.note} ${ownersOf(r).join(' ')}`.toLowerCase();
         return words.every((w) => hay.includes(w));
       };
       loader.items = all.filter(hit).slice(0, 200);
@@ -367,7 +461,7 @@
               const on = loader.picked.has(r.id);
               return `<label class="ldr-item ${on ? 'on' : ''}">
                 <input type="checkbox" data-i="${i}" ${on ? 'checked' : ''}>
-                <span class="ldr-meta">${DR.shortDate(r.date)} · ${DR.esc(ownersOf(r).join(', '))}${r.part ? ` · ${DR.esc(r.part)}` : ''}${
+                <span class="ldr-meta">${DR.esc(tagId(r.taskId))} · ${DR.shortDate(r.date)} · ${DR.esc(ownersOf(r).join(', '))}${r.part ? ` · ${DR.esc(r.part)}` : ''}${
                   r.progress ? ` · <span class="${isDone(r.progress) ? 'ok' : ''}">${DR.esc(r.progress)}</span>` : ''
                 }</span>
                 <span class="ldr-title">${DR.esc(r.title)}</span>
@@ -407,10 +501,25 @@
     const picked = [...loader.picked.values()];
     if (!picked.length) return;
     state.draft = state.draft.filter((r) => !(r.id.startsWith('tmp-') && isBlank(r)));
-    picked.forEach((r) => state.draft.push(blank({ part: r.part, title: r.title, content: r.content })));
+    const have = new Set(state.draft.map((r) => r.taskId));
+    let added = 0;
+    let dup = 0;
+    picked.forEach((r) => {
+      // 끝나지 않은 과제는 이어서 하는 것이므로 번호를 유지, 끝난 과제는 양식만 빌려 새 번호
+      const taskId = !isDone(r.progress) && r.taskId ? r.taskId : undefined;
+      if (taskId && have.has(taskId)) return dup++;
+      if (taskId) have.add(taskId);
+      state.draft.push(blank({ taskId, part: r.part, title: r.title, content: r.content, owners: taskId ? r.owners : state.me }));
+      added++;
+    });
     closeLoader();
     renderInput();
-    DR.toast(`${picked.length}건을 추가했습니다. 진행율과 내용을 고친 뒤 저장하세요.`);
+    DR.toast(
+      [added && `${added}건을 추가했습니다. 진행율과 내용을 고친 뒤 저장하세요.`, dup && `이미 목록에 있는 과제 ${dup}건은 빼고 넣었습니다.`]
+        .filter(Boolean)
+        .join(' '),
+      dup && !added ? 'warn' : 'ok'
+    );
   }
 
   function bindLoader() {
@@ -532,7 +641,11 @@
       }
       if (!e.target.closest('[data-del]')) return;
       const r = rowOf(e.target);
-      if (!r.carried && !isBlank(r) && !(await DR.confirm('이 업무를 목록에서 지울까요? 저장해야 반영됩니다.', '지우기'))) return;
+      const shared = ownersOf(r).length > 1 || (r.author && r.author !== state.me);
+      const msg = shared
+        ? '공동 과제입니다. 지우면 다른 담당자의 보고에서도 사라집니다. 지울까요? (저장해야 반영됩니다)'
+        : '이 업무를 목록에서 지울까요? 저장해야 반영됩니다.';
+      if (!r.carried && !isBlank(r) && !(await DR.confirm(msg, '지우기'))) return;
       state.draft = state.draft.filter((x) => x !== r);
       renderInput();
     });
@@ -621,7 +734,7 @@
   const ownerChips = (r) => ownersOf(r).map((n) => `<span class="chip">${DR.esc(n)}</span>`).join('');
 
   function renderDay() {
-    const cols = ['소속파트', '제목', '내용', '진행율', '비고', '담당자', '작성시각'];
+    const cols = ['소속파트', '과제번호', '제목', '내용', '진행율', '비고', '담당자', '최종 수정'];
     let n = 0;
     const body = dayGroups()
       .map((g) => {
@@ -629,25 +742,26 @@
           `<td class="part-group" rowspan="${span}"><b>${DR.esc(g.part)}</b><small>${g.rows.length}건</small></td>`;
         if (!g.rows.length) {
           n++;
-          return `<tr class="group-end empty-part"><th class="rn">${n}</th>${partCell(1)}<td colspan="6" class="muted">보고된 업무 없음</td></tr>`;
+          return `<tr class="group-end empty-part"><th class="rn">${n}</th>${partCell(1)}<td colspan="7" class="muted">보고된 업무 없음</td></tr>`;
         }
         return g.rows
           .map((r, i) => {
             n++;
             const cls = [i === g.rows.length - 1 ? 'group-end' : '', isDone(r.progress) ? 'is-done' : ''].join(' ');
             return `<tr class="${cls}"><th class="rn">${n}</th>${i === 0 ? partCell(g.rows.length) : ''}
+              <td class="tid-cell">${DR.esc(r.taskId)}</td>
               <td class="title">${multi(r.title)}</td>
               <td class="content">${multi(r.content)}</td>
               <td class="prog">${progressHtml(r.progress)}</td>
               <td class="note">${multi(r.note)}</td>
               <td class="owners-cell">${ownerChips(r)}</td>
-              <td class="time">${DR.fmtTime(r.updatedAt || r.createdAt)}</td></tr>`;
+              <td class="time">${DR.fmtTime(r.updatedAt || r.createdAt)}<small>${DR.esc(r.editor || r.author)}</small></td></tr>`;
           })
           .join('');
       })
       .join('');
     return `<table class="sheet sheet-day">
-      <thead><tr class="letters"><th class="corner"></th>${cols.map((_, i) => `<th>${'ABCDEFG'[i]}</th>`).join('')}</tr>
+      <thead><tr class="letters"><th class="corner"></th>${cols.map((_, i) => `<th>${'ABCDEFGH'[i]}</th>`).join('')}</tr>
       <tr><th class="corner"></th>${cols.map((c) => `<th>${c}</th>`).join('')}</tr></thead>
       <tbody>${body}</tbody></table>`;
   }
@@ -740,10 +854,10 @@
   // 복사·CSV용 2차원 배열
   function exportRows() {
     if (state.ld.mode === 'day') {
-      const out = [['날짜', '소속파트', '제목', '내용', '진행율', '비고', '담당자', '작성시각']];
+      const out = [['날짜', '소속파트', '과제번호', '제목', '내용', '진행율', '비고', '담당자', '최종 수정', '수정자']];
       for (const g of dayGroups())
         for (const r of g.rows)
-          out.push([r.date, g.part, r.title, r.content, r.progress, r.note, ownersOf(r).join(', '), DR.fmtTime(r.updatedAt || r.createdAt)]);
+          out.push([r.date, g.part, r.taskId, r.title, r.content, r.progress, r.note, ownersOf(r).join(', '), DR.fmtTime(r.updatedAt || r.createdAt), r.editor || r.author]);
       return out;
     }
     const days = weekDays(state.ld.date);
