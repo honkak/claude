@@ -4,24 +4,27 @@
  * goodocs 어댑터와 똑같은 함수(list/create/update/remove)를 제공한다.
  */
 (function (DR) {
-  const KEY = 'dr-mock-rows-v2';
+  const KEY = 'dr-mock-rows-v3';
   let rows = null;
 
   // 예시 업무: [소속파트, 제목, 내용]
   const TASKS = [
-    ['공조', '공조기 AHU-12 필터 교체\n- 차압 상승 알람 대응', '1. 차압 측정: 전단 180Pa → 기준 150Pa 초과\n2. 필터 재고 확인: 프리필터 12EA, 미디엄 6EA\n3. 교체 일정 협의: 10/8(수) 야간\n4. 생산팀 공지 요청 완료'],
-    ['전기', '신규 라인 전기 부하 계산\n- 2차 변경안 반영', '- 설비 리스트 rev.3 기준 재산정\n- 총 부하 1,240kW → 1,315kW (+75kW)\n- 변압기 TR-3 여유율 18% → 12%\n- 분전반 MCC-07 차단기 용량 검토 필요\n- 결과 보고서 초안 작성 중'],
-    ['배기', '스크러버 약품 투입량 점검', '- 일 평균 투입량 42L (전주 대비 +8%)\n- pH 제어 편차 확인: 설정 7.0 / 실측 6.6~7.4\n- 투입 펌프 스트로크 조정 예정'],
-    ['수처리', '수처리 pH 센서 교정\n- 3개 지점', '- 1차 반응조, 2차 반응조, 방류조 센서 교정\n- 표준액 pH 4 / 7 / 10 사용\n- 방류조 센서 응답 지연 → 교체 검토\n- 교정 기록서 작성 완료'],
-    ['가스', '가스 누출 감지기 정기 점검', '- 대상 24개소 중 18개소 완료\n- 감도 이상 1개소 (B동 2층) → 업체 수리 요청\n- 잔여 6개소 내일 진행'],
-    ['전기', '변전실 열화상 측정', '- 수배전반 12면 측정\n- 최고 온도 48℃ (기준 이내)\n- 측정 사진 정리 후 공유 예정'],
-    ['공조', '냉동기 부품 견적 비교\n- 압축기 오버홀 부품', '- 3개 업체 견적 접수\n  A사 3,200만원 / B사 2,950만원 / C사 3,480만원\n- 납기: A사 4주, B사 6주, C사 3주\n- 기술 사양 비교표 작성 중\n- 구매팀 검토 요청 예정'],
-    ['건설기획', 'BIM 모델 배관 간섭 검토\n- 3층 유틸리티 구간', '- 간섭 23건 검출\n- 중대 간섭 4건: 덕트 vs 케이블트레이\n- 설계사에 수정 요청 송부\n- 회신 후 재검토 일정 수립'],
-    ['전기', 'PLC 알람 이력 분석\n- 9월분', '- 총 알람 1,532건\n- 상위 3개 알람이 전체의 61%\n- 반복 알람 원인: 센서 채터링 추정\n- 필터 타이머 적용 검토'],
-    ['공조', '설비 PM 일정표 업데이트', '- 4분기 PM 일정 확정\n- 협력사 인력 배정 협의 완료'],
+    ['수변전', '154kV 변전소 정기점검\n- GIS 가스압력·부분방전', '1. GIS SF6 가스압력 측정: 전 구간 정상 (0.5MPa)\n2. 부분방전(UHF) 측정: 특이사항 없음\n3. 차단기 동작횟수 기록\n4. 점검 결과서 작성'],
+    ['수변전', '변압기 TR-3 절연유 분석\n- 정기 샘플링', '- 절연유 샘플 채취 및 분석 의뢰\n- 유중가스(DGA) 결과: C2H2 미검출\n- 수분 12ppm (기준 이내)\n- 결과 이력표 갱신'],
+    ['배전', '신규 라인 전기 부하 계산\n- 설비 리스트 rev.3 반영', '- 총 부하 1,240kW → 1,315kW (+75kW)\n- 변압기 TR-3 여유율 18% → 12%\n- 분전반 MCC-07 차단기 용량 검토 필요\n- 보고서 초안 작성'],
+    ['배전', 'MCC-07 차단기 교체 검토\n- 용량 부족', '- 현 차단기 400AF/350AT\n- 신규 부하 반영 시 420A 예상\n- 630AF 교체안 / 부하 분산안 비교\n- 정전 작업 일정 협의 필요'],
+    ['배전', '분전반 열화상 측정\n- B동 1~3층', '- 분전반 36면 측정\n- 최고 온도 52℃ (LP-2F-07, 단자 체결 불량 의심)\n- 재체결 작업 요청\n- 측정 사진 정리'],
+    ['계장제어', 'PLC 알람 이력 분석\n- 월간', '- 총 알람 1,532건\n- 상위 3개 알람이 전체의 61%\n- 반복 알람 원인: 센서 채터링 추정\n- 필터 타이머 적용 검토'],
+    ['계장제어', '전력감시(PMS) 화면 개선\n- 수변전 단선도 갱신', '- 신규 피더 4개 반영\n- 태그 매핑 확인 32점\n- 알람 등급 재분류\n- 운영팀 검수 요청'],
+    ['전력품질', '고조파 측정 및 분석\n- 인버터 부하 증가 구간', '- 측정 지점: MCC-03, MCC-05\n- THD(V) 4.2%, THD(I) 18.5%\n- 5차 고조파 우세\n- 능동필터 적용 검토'],
+    ['전력품질', '순간전압강하 이력 정리\n- 한전 계통 이벤트', '- 9월 이벤트 3건 (최저 72%, 120ms)\n- 영향 설비: 진공펌프 2대 정지\n- UPS/DVR 적용 범위 검토'],
+    ['설계', '증설 라인 단선결선도 검토\n- 설계사 2차 도면', '- 단선결선도 rev.B 검토\n- 보호계전기 정정값 확인 필요 3건\n- 케이블 사이징 재계산 요청\n- 검토 의견서 송부'],
+    ['설계', '비상발전기 용량 검토\n- 부하 증설 반영', '- 현 2,000kW × 2대\n- 비상부하 합계 3,420kW → 3,610kW\n- 기동 순서(시퀀스) 조정안 작성\n- 증설 필요성 보고 예정'],
+    ['안전', '전기 작업허가서 검토\n- 협력사 정전 작업', '- 작업허가 5건 검토\n- LOTO 절차 누락 1건 보완 요청\n- 작업 전 안전교육 실시'],
+    ['안전', '접지저항 정기 측정', '- 측정 지점 18개소\n- 최대 8.2Ω (기준 10Ω 이내)\n- 측정 기록 시스템 등록'],
+    ['수변전', 'UPS 배터리 교체 검토\n- 2호기 내용연수 초과', '- 배터리 192셀, 설치 2019년\n- 내부저항 상승 셀 14개\n- 교체 견적 2개 업체 요청\n- 교체 시 바이패스 운전 계획 수립'],
   ];
-  const NOTES = ['', '', '', '업체 회신 대기', '부품 납기 2주 지연, 대체품 검토 필요', '현장 출입 승인 필요', '예산 확인 요청'];
-  const PROGRESS = ['30%', '50%', '70%', '80%', '100%', '완료', '진행중'];
+  const NOTES = ['', '', '', '', '업체 회신 대기', '부품 납기 2주 지연, 대체품 검토 필요', '정전 일정 협의 필요', '예산 확인 요청'];
 
   // 새로고침해도 같은 예시가 나오도록 고정 시드 난수 사용
   function rng(seed) {
@@ -30,41 +33,55 @@
   }
   const pick = (rand, arr) => arr[Math.floor(rand() * arr.length)];
 
+  // 구성원마다 업무 2~3건을 들고, 날마다 진행율이 오르다가 완료되면 새 업무로 바뀌는 흐름을 만든다
   function seed() {
     const cfg = window.APP_CONFIG;
-    const rand = rng(42);
+    const rand = rng(7);
     const out = [];
     const today = DR.today();
-    let day = DR.isWeekend(today) ? DR.shiftWorkday(today, -1) : today;
     const days = [];
-    for (let i = 0; i < 8; i++) {
+    let day = DR.shiftWorkday(today, -1); // 어제까지만 채우고 오늘은 비워 둔다
+    for (let i = 0; i < 70; i++) {
       days.unshift(day);
       day = DR.shiftWorkday(day, -1);
     }
-    days.forEach((date, di) => {
-      const isLast = di === days.length - 1;
-      cfg.MEMBERS.forEach((author, mi) => {
-        if (isLast && mi >= 4) return; // 오늘은 일부만 제출한 상태로 시작
-        if (!isLast && rand() < 0.08) return; // 과거에도 가끔 미제출
-        const at = new Date(DR.parseDate(date).setHours(16 + Math.floor(rand() * 3), Math.floor(rand() * 60)));
-        const stamp = at.toISOString();
-        const n = 1 + Math.floor(rand() * 3);
-        for (let k = 0; k < n; k++) {
-          const [part, title, content] = pick(rand, TASKS);
+    const active = Object.fromEntries(cfg.MEMBERS.map((m) => [m, []]));
+    const newTask = () => {
+      const [part, title, content] = pick(rand, TASKS);
+      return { part, title, content, p: 10 * (1 + Math.floor(rand() * 3)), note: pick(rand, NOTES) };
+    };
+    days.forEach((date) => {
+      cfg.MEMBERS.forEach((author) => {
+        const list = active[author];
+        while (list.length < 2 + (rand() < 0.4 ? 1 : 0)) list.push(newTask());
+        if (rand() < 0.06) return; // 가끔 미제출
+        const at = new Date(DR.parseDate(date).setHours(16 + Math.floor(rand() * 3), Math.floor(rand() * 60))).toISOString();
+        list.forEach((t) => {
+          t.p = Math.min(100, t.p + 10 * Math.floor(rand() * 4));
           out.push({
             id: 'm-' + out.length,
             date,
             author,
-            part,
-            title,
-            content,
-            progress: pick(rand, PROGRESS),
-            note: pick(rand, NOTES),
-            createdAt: stamp,
-            updatedAt: stamp,
+            part: t.part,
+            title: t.title,
+            content: t.content,
+            progress: t.p >= 100 ? '완료' : `${t.p}%`,
+            note: t.p >= 100 ? '' : t.note,
+            createdAt: at,
+            updatedAt: at,
           });
-        }
+          if (rand() < 0.15) t.note = pick(rand, NOTES);
+        });
+        active[author] = list.filter((t) => t.p < 100);
       });
+    });
+    // 오늘은 앞의 4명만 이미 제출한 상태로 시작 (이월 업무를 그대로 제출했다고 가정)
+    const last = days[days.length - 1];
+    const now = new Date().toISOString();
+    cfg.MEMBERS.slice(0, 4).forEach((author) => {
+      out
+        .filter((r) => r.author === author && r.date === last && r.progress !== '완료')
+        .forEach((r) => out.push({ ...r, id: 'm-' + out.length, date: today, createdAt: now, updatedAt: now }));
     });
     return out;
   }

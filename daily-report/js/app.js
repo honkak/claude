@@ -14,6 +14,7 @@
     inDate: DR.today(),
     server: [], // 서버에 저장된 내 행
     draft: [], // 화면에서 편집 중인 내 행
+    carryFrom: null, // 이월해 온 보고의 날짜
     saving: false,
     ld: {
       mode: DR.storage.get('dr-ld-mode', 'day'),
@@ -24,7 +25,6 @@
       loading: false,
     },
   };
-  if (!cfg.MEMBERS.includes(state.me)) state.me = '';
 
   const byTime = (a, b) => String(a.createdAt).localeCompare(String(b.createdAt));
   const isBlank = (r) => !r.title.trim() && !r.content.trim();
@@ -33,6 +33,7 @@
     const m = String(v ?? '').trim().match(/^(\d{1,3})\s*%?$/);
     return m ? Math.min(100, Number(m[1])) : /완료/.test(v) ? 100 : null;
   };
+  const isDone = (v) => percentOf(v) === 100;
 
   /* ───────────── 공통 ───────────── */
 
@@ -104,38 +105,48 @@
 
   function entryHtml(r, i, ro) {
     const dis = ro ? 'disabled' : '';
+    const done = isDone(r.progress);
     const area = (f, label, ph, rows) =>
       `<label class="cell c-${f}"><span class="cell-label">${label}</span><textarea data-f="${f}" rows="${rows}" placeholder="${ph}" ${dis}>${DR.esc(r[f])}</textarea></label>`;
     const line = (f, label, ph, extra = '') =>
-      `<label class="cell c-${f}"><span class="cell-label">${label}</span><input type="text" data-f="${f}" value="${DR.esc(r[f])}" placeholder="${ph}" ${extra} ${dis}></label>`;
-    return `<div class="entry" data-id="${r.id}">
-      <span class="entry-no">${i + 1}</span>
-      ${line('part', '소속파트', '예: 공조', 'list="part-list"')}
+      `<input type="text" data-f="${f}" value="${DR.esc(r[f])}" placeholder="${ph}" aria-label="${label}" ${extra} ${dis}>`;
+    const doneBtn = ro
+      ? ''
+      : `<button type="button" class="done-btn" data-done aria-pressed="${done}">${done ? '✓ 완료됨' : '완료'}</button>`;
+    const cls = ['entry', r.carried ? 'carried' : '', done ? 'is-done' : ''].join(' ');
+    return `<div class="${cls}" data-id="${r.id}">
+      <span class="entry-no">${i + 1}${r.carried ? '<small>이월</small>' : ''}</span>
+      <label class="cell c-part"><span class="cell-label">소속파트</span>${line('part', '소속파트', '예: 수변전', 'list="part-list"')}</label>
       ${area('title', '제목', '업무 제목 (여러 줄 가능)', 3)}
       ${area('content', '내용', '세부 내용', 3)}
-      ${line('progress', '진행율', '예: 70%')}
+      <div class="cell c-progress"><span class="cell-label">진행율</span>${line('progress', '진행율', '예: 70%')}${doneBtn}</div>
       ${area('note', '비고', '', 3)}
       ${ro ? '<span></span>' : '<button type="button" class="icon-btn del" data-del aria-label="이 업무 삭제">×</button>'}
     </div>`;
   }
 
   function renderInput() {
-    $('#me-select').innerHTML =
-      `<option value="">이름 선택</option>` +
-      cfg.MEMBERS.map((m) => `<option ${m === state.me ? 'selected' : ''}>${DR.esc(m)}</option>`).join('');
+    const hasMe = !!state.me;
+    $('#me-setup').hidden = hasMe;
+    $('#whoami').hidden = !hasMe;
+    $('#in-body').hidden = !hasMe;
+    $('#me-name').textContent = state.me;
     $('#in-date').value = state.inDate;
-    $('#in-empty').hidden = !!state.me;
-    $('#in-body').hidden = !state.me;
-    if (!state.me) return;
+    if (!hasMe) return;
 
     const ro = !editable();
     $('#in-heading').textContent = `${DR.labelDate(state.inDate)} · ${state.me}`;
     $('#in-notice').hidden = !ro;
     $('#in-notice').textContent = ro ? '지난 날짜의 보고입니다. 수정이 필요하면 팀장에게 요청하세요.' : '';
+    const carried = state.draft.filter((r) => r.carried).length;
+    $('#carry-notice').hidden = ro || !state.carryFrom;
+    $('#carry-notice').innerHTML = state.carryFrom
+      ? `<b>${DR.shortDate(state.carryFrom)} 보고에서 미완료 업무를 이월했습니다.</b> 회색 글자는 아직 손대지 않은 업무입니다(${carried}건). 내용을 고치면 검은 글자로 바뀌고, 끝난 업무는 <b>완료</b>를 누르세요. 완료한 업무는 다음 날 이월되지 않습니다.`
+      : '';
     $('#entries').innerHTML = state.draft.length
       ? state.draft.map((r, i) => entryHtml(r, i, ro)).join('')
       : '<p class="rows-empty">이 날짜에 작성한 업무가 없습니다.</p>';
-    $('#add-entry').hidden = $('#pull-prev').hidden = ro;
+    $('#view-input .add-row').hidden = ro;
     autosizeAll();
     updateSavebar();
   }
@@ -156,13 +167,27 @@
     ...fill,
   });
 
+  // 오늘 보고가 비어 있으면, 가장 최근 보고의 미완료 업무를 회색(이월)으로 띄운다
+  async function carryOver() {
+    const from = DR.addDays(state.inDate, -cfg.CARRY_LOOKBACK_DAYS);
+    const prev = await store.list({ from, to: DR.addDays(state.inDate, -1), author: state.me });
+    if (!prev.length) return;
+    const last = prev.reduce((m, r) => (r.date > m ? r.date : m), '');
+    const open = prev.filter((r) => r.date === last && !isDone(r.progress)).sort(byTime);
+    if (!open.length) return;
+    state.carryFrom = last;
+    open.forEach((r) => state.draft.push(blank({ ...clean(r), carried: true })));
+  }
+
   async function loadMine() {
+    state.carryFrom = null;
     if (!state.me) return renderInput();
     try {
       const rows = await store.list({ from: state.inDate, to: state.inDate, author: state.me });
       rows.sort(byTime);
       state.server = rows;
       state.draft = rows.map((r) => ({ ...r }));
+      if (editable() && !rows.length) await carryOver();
       if (editable() && !state.draft.length) state.draft.push(blank());
     } catch (e) {
       state.server = [];
@@ -177,24 +202,6 @@
     state.draft.push(r);
     renderInput();
     $(`[data-id="${r.id}"] [data-f="title"]`)?.focus();
-  }
-
-  // 직전 보고(최근 2주 이내)의 업무를 그대로 복사해 오늘 칸에 넣는다
-  async function pullPrev() {
-    try {
-      const rows = await store.list({ from: DR.addDays(state.inDate, -14), to: DR.addDays(state.inDate, -1), author: state.me });
-      if (!rows.length) return DR.toast('최근 2주 안에 작성한 보고가 없습니다.', 'warn');
-      const last = rows.reduce((m, r) => (r.date > m ? r.date : m), '');
-      const have = new Set(state.draft.map((r) => r.title.trim()));
-      const picked = rows.filter((r) => r.date === last && !have.has(r.title.trim())).sort(byTime);
-      if (!picked.length) return DR.toast('불러올 업무가 없습니다. 이미 모두 들어가 있습니다.', 'warn');
-      state.draft = state.draft.filter((r) => !(r.id.startsWith('tmp-') && isBlank(r)));
-      picked.forEach((p) => state.draft.push(blank(clean(p))));
-      renderInput();
-      DR.toast(`${DR.shortDate(last)} 보고 ${picked.length}건을 불러왔습니다. 내용과 진행율을 고친 뒤 저장하세요.`);
-    } catch (e) {
-      showError(e);
-    }
   }
 
   async function save() {
@@ -231,37 +238,180 @@
     loadMine();
   }
 
+  function setMe(name) {
+    state.me = name;
+    DR.storage.set('dr-me', name);
+  }
+
+  /* ── 지난 업무에서 불러오기 ── */
+
+  const loader = { cache: new Map(), items: [], picked: new Map() };
+
+  async function fetchLoaderRows() {
+    const who = $('#ldr-who').value;
+    const days = Number($('#ldr-period').value);
+    const key = `${who}|${days}|${state.inDate}`;
+    if (!loader.cache.has(key)) {
+      const rows = await store.list({
+        from: days ? DR.addDays(state.inDate, -days) : undefined,
+        to: DR.addDays(state.inDate, -1),
+        author: who === '*' ? undefined : who,
+      });
+      // 같은 사람의 같은 업무는 여러 날 반복되므로, 가장 최근 것 하나만 남긴다
+      const latest = new Map();
+      for (const r of rows) {
+        const k = `${r.author}|${r.title.trim()}|${r.part.trim()}`;
+        const cur = latest.get(k);
+        if (!cur || r.date > cur.date) latest.set(k, r);
+      }
+      loader.cache.set(key, [...latest.values()].sort((a, b) => b.date.localeCompare(a.date) || byTime(b, a)));
+    }
+    return loader.cache.get(key);
+  }
+
+  async function refreshLoader() {
+    $('#ldr-list').innerHTML = '<p class="meta">불러오는 중…</p>';
+    try {
+      const all = await fetchLoaderRows();
+      const words = $('#ldr-q').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const hit = (r) => {
+        const hay = `${r.part} ${r.title} ${r.content} ${r.note}`.toLowerCase();
+        return words.every((w) => hay.includes(w));
+      };
+      loader.items = all.filter(hit).slice(0, 200);
+      const total = all.filter(hit).length;
+      $('#ldr-count').textContent = total
+        ? `${total}건${total > 200 ? ' 중 최근 200건' : ''} · 같은 업무는 가장 최근 보고 하나만 보입니다`
+        : '';
+      $('#ldr-list').innerHTML = loader.items.length
+        ? loader.items
+            .map((r, i) => {
+              const on = loader.picked.has(r.id);
+              return `<label class="ldr-item ${on ? 'on' : ''}">
+                <input type="checkbox" data-i="${i}" ${on ? 'checked' : ''}>
+                <span class="ldr-meta">${DR.shortDate(r.date)} · ${DR.esc(r.author)}${r.part ? ` · ${DR.esc(r.part)}` : ''}${
+                  r.progress ? ` · <span class="${isDone(r.progress) ? 'ok' : ''}">${DR.esc(r.progress)}</span>` : ''
+                }</span>
+                <span class="ldr-title">${DR.esc(r.title)}</span>
+                <span class="ldr-content">${DR.esc(r.content)}</span>
+              </label>`;
+            })
+            .join('')
+        : '<p class="rows-empty">조건에 맞는 업무가 없습니다. 기간을 늘리거나 검색어를 바꿔 보세요.</p>';
+    } catch (e) {
+      $('#ldr-list').innerHTML = '';
+      showError(e);
+    }
+    updateLoaderFoot();
+  }
+
+  function updateLoaderFoot() {
+    const n = loader.picked.size;
+    $('#ldr-picked').textContent = n ? `${n}건 선택` : '추가할 업무를 고르세요';
+    $('#ldr-add').disabled = !n;
+  }
+
+  function openLoader() {
+    const others = cfg.MEMBERS.filter((m) => m !== state.me);
+    $('#ldr-who').innerHTML =
+      `<option value="${DR.esc(state.me)}">내 업무</option><option value="*">팀 전체</option>` +
+      others.map((m) => `<option value="${DR.esc(m)}">${DR.esc(m)}</option>`).join('');
+    $('#ldr-q').value = '';
+    loader.picked = new Map();
+    loader.cache.clear();
+    $('#loader').hidden = false;
+    $('#ldr-q').focus();
+    refreshLoader();
+  }
+  const closeLoader = () => ($('#loader').hidden = true);
+
+  function addFromLoader() {
+    const picked = [...loader.picked.values()];
+    if (!picked.length) return;
+    state.draft = state.draft.filter((r) => !(r.id.startsWith('tmp-') && isBlank(r)));
+    picked.forEach((r) => state.draft.push(blank({ part: r.part, title: r.title, content: r.content })));
+    closeLoader();
+    renderInput();
+    DR.toast(`${picked.length}건을 추가했습니다. 진행율과 내용을 고친 뒤 저장하세요.`);
+  }
+
+  function bindLoader() {
+    $('#open-loader').onclick = openLoader;
+    $('#loader-close').onclick = $('#ldr-cancel').onclick = closeLoader;
+    $('#ldr-add').onclick = addFromLoader;
+    $('#ldr-who').onchange = $('#ldr-period').onchange = refreshLoader;
+    let t;
+    $('#ldr-q').addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(refreshLoader, 200);
+    });
+    $('#ldr-list').addEventListener('change', (e) => {
+      const r = loader.items[Number(e.target.dataset.i)];
+      if (!r) return;
+      if (e.target.checked) loader.picked.set(r.id, r);
+      else loader.picked.delete(r.id);
+      e.target.closest('.ldr-item').classList.toggle('on', e.target.checked);
+      updateLoaderFoot();
+    });
+    $('#loader').addEventListener('keydown', (e) => e.key === 'Escape' && closeLoader());
+  }
+
   function bindInput() {
-    $('#me-select').addEventListener('change', async (e) => {
-      if (!(await guard())) return renderInput();
-      state.me = e.target.value;
-      DR.storage.set('dr-me', state.me);
+    $('#member-list').innerHTML = cfg.MEMBERS.map((m) => `<option value="${DR.esc(m)}">`).join('');
+    $('#me-setup').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = $('#me-input').value.trim();
+      if (!name) return $('#me-input').focus();
+      setMe(name);
       loadMine();
     });
+    $('#me-change').onclick = async () => {
+      if (!(await guard())) return;
+      setMe('');
+      state.server = [];
+      state.draft = [];
+      renderInput();
+      $('#me-input').value = '';
+      $('#me-input').focus();
+    };
     $('#in-date').addEventListener('change', (e) => goInputDate(e.target.value));
     $('#in-prev').onclick = () => goInputDate(DR.shiftWorkday(state.inDate, -1));
     $('#in-next').onclick = () => goInputDate(DR.shiftWorkday(state.inDate, 1));
     $('#in-today').onclick = () => goInputDate(DR.today());
-    $('#pull-prev').onclick = pullPrev;
     $('#add-entry').onclick = addEntry;
     $('#save-btn').onclick = save;
     $('#part-list').innerHTML = cfg.PARTS.map((p) => `<option value="${DR.esc(p)}">`).join('');
 
     const box = $('#entries');
+    const rowOf = (el) => state.draft.find((x) => x.id === el.closest('[data-id]')?.dataset.id);
     box.addEventListener('input', (e) => {
       const f = e.target.dataset.f;
-      const r = state.draft.find((x) => x.id === e.target.closest('[data-id]')?.dataset.id);
+      const r = rowOf(e.target);
       if (!f || !r) return;
       r[f] = e.target.value;
+      if (r.carried) {
+        r.carried = false; // 손댄 이월 업무는 검은 글자로
+        e.target.closest('.entry').classList.remove('carried');
+      }
+      if (f === 'progress') e.target.closest('.entry').classList.toggle('is-done', isDone(r.progress));
       if (e.target.tagName === 'TEXTAREA') autosize(e.target);
       updateSavebar();
     });
     box.addEventListener('click', async (e) => {
+      if (e.target.closest('[data-done]')) {
+        const r = rowOf(e.target);
+        if (isDone(r.progress)) r.progress = r.prevProgress ?? '';
+        else {
+          r.prevProgress = r.progress;
+          r.progress = '완료';
+        }
+        r.carried = false;
+        return renderInput();
+      }
       if (!e.target.closest('[data-del]')) return;
-      const id = e.target.closest('[data-id]').dataset.id;
-      const r = state.draft.find((x) => x.id === id);
-      if (!isBlank(r) && !(await DR.confirm('이 업무를 목록에서 지울까요? 저장해야 반영됩니다.', '지우기'))) return;
-      state.draft = state.draft.filter((x) => x.id !== id);
+      const r = rowOf(e.target);
+      if (!r.carried && !isBlank(r) && !(await DR.confirm('이 업무를 목록에서 지울까요? 저장해야 반영됩니다.', '지우기'))) return;
+      state.draft = state.draft.filter((x) => x !== r);
       renderInput();
     });
     document.addEventListener('keydown', (e) => {
@@ -277,6 +427,7 @@
       }
     });
     window.addEventListener('resize', autosizeAll);
+    bindLoader();
   }
 
   /* ───────────── 팀장: 팀 현황 ───────────── */
@@ -398,7 +549,7 @@
             const items = c.items
               .map(
                 (r) =>
-                  `<li><span class="wk-text">${DR.esc(firstLine(r.title) || firstLine(r.content))}</span><span class="wk-p">${DR.esc(r.progress)}</span>${
+                  `<li><span class="wk-text">${DR.esc(firstLine(r.title) || firstLine(r.content))}</span><span class="wk-p ${isDone(r.progress) ? 'ok' : ''}">${DR.esc(r.progress)}</span>${
                     r.note.trim() ? `<span class="wk-note">비고: ${DR.esc(firstLine(r.note))}</span>` : ''
                   }</li>`
               )

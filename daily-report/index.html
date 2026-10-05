@@ -28,10 +28,11 @@
   <!-- 팀원: 내 업무 입력 -->
   <main id="view-input" class="view" role="tabpanel" aria-labelledby="tab-input">
     <div class="toolbar">
-      <label class="field">
-        <span>작성자</span>
-        <select id="me-select"></select>
-      </label>
+      <div class="whoami" id="whoami" hidden>
+        <span class="whoami-label">작성자</span>
+        <strong id="me-name"></strong>
+        <button type="button" class="btn ghost small" id="me-change">변경</button>
+      </div>
       <div class="date-nav" role="group" aria-label="보고 날짜">
         <button type="button" class="icon-btn" id="in-prev" aria-label="이전 근무일">‹</button>
         <input type="date" id="in-date" aria-label="보고 날짜">
@@ -40,25 +41,33 @@
       </div>
     </div>
 
-    <div id="in-empty" class="empty-state" hidden>
-      <strong>작성자를 먼저 선택하세요.</strong>
-      <span>선택한 이름은 이 PC에 기억되어 다음부터 바로 입력할 수 있습니다.</span>
-    </div>
+    <form id="me-setup" class="empty-state">
+      <strong>처음 한 번만 이름을 입력하세요.</strong>
+      <span>입력한 이름은 이 PC의 크롬에 저장되어, 다음부터는 바로 업무를 입력할 수 있습니다.</span>
+      <div class="setup-row">
+        <input type="text" id="me-input" list="member-list" placeholder="이름" autocomplete="off" aria-label="이름">
+        <button type="submit" class="btn primary">시작</button>
+      </div>
+      <datalist id="member-list"></datalist>
+    </form>
 
     <div id="in-body">
       <p id="in-heading" class="report-heading"></p>
       <div id="in-notice" class="banner banner-info" hidden></div>
+      <div id="carry-notice" class="banner banner-carry" hidden></div>
 
       <section class="block">
         <header class="block-head">
           <h2>업무 목록</h2>
-          <button type="button" class="btn ghost" id="pull-prev">지난 보고 불러오기</button>
         </header>
         <div class="entry entry-head" aria-hidden="true">
           <span>#</span><span>소속파트</span><span>제목</span><span>내용</span><span>진행율</span><span>비고</span><span></span>
         </div>
         <div id="entries" class="entries"></div>
-        <button type="button" class="btn add" id="add-entry">+ 업무 추가</button>
+        <div class="add-row">
+          <button type="button" class="btn add" id="add-entry">+ 빈 업무 추가</button>
+          <button type="button" class="btn add" id="open-loader">+ 지난 업무에서 불러오기</button>
+        </div>
       </section>
       <datalist id="part-list"></datalist>
 
@@ -99,6 +108,37 @@
 </div>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<div id="loader" class="dialog-backdrop" hidden>
+  <div class="dialog loader" role="dialog" aria-modal="true" aria-labelledby="loader-title">
+    <header class="loader-head">
+      <h2 id="loader-title">지난 업무에서 불러오기</h2>
+      <button type="button" class="icon-btn del" id="loader-close" aria-label="닫기">×</button>
+    </header>
+    <div class="loader-filters">
+      <label class="field"><span>누구</span>
+        <select id="ldr-who"></select>
+      </label>
+      <label class="field"><span>기간</span>
+        <select id="ldr-period">
+          <option value="30">최근 1개월</option>
+          <option value="90" selected>최근 3개월</option>
+          <option value="180">최근 6개월</option>
+          <option value="365">최근 1년</option>
+          <option value="0">전체</option>
+        </select>
+      </label>
+      <input type="search" id="ldr-q" placeholder="제목·내용·파트 검색" aria-label="검색어">
+    </div>
+    <p id="ldr-count" class="meta"></p>
+    <div id="ldr-list" class="loader-list"></div>
+    <footer class="loader-foot">
+      <span id="ldr-picked" class="meta"></span>
+      <button type="button" class="btn" id="ldr-cancel">취소</button>
+      <button type="button" class="btn primary" id="ldr-add" disabled>선택한 업무 추가</button>
+    </footer>
+  </div>
+</div>
 
 <div id="dialog" class="dialog-backdrop" hidden>
   <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-msg">
