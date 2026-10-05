@@ -55,6 +55,8 @@
   // 내가 작성했거나 담당자로 들어간 과제 → 내 입력 화면에 보이고 수정할 수 있다
   const involves = (r, name = state.me) => r.author === name || ownersOf(r).includes(name);
   const tagId = (id) => (id ? `#${id}` : '');
+  // 좁은 칸에서 보기 좋게 날짜 뒤에서 줄바꿈될 수 있게
+  const tagIdHtml = (id) => (id ? DR.esc(tagId(id)).replace(/^(#[^-]+-\d{6}-)/, '$1<wbr>') : '새 과제');
 
   /* ───────────── 공통 ───────────── */
 
@@ -157,7 +159,7 @@
       : `<button type="button" class="done-btn" data-done aria-pressed="${done}">${done ? '✓ 완료됨' : '완료'}</button>`;
     const cls = ['entry', r.carried ? 'carried' : '', done ? 'is-done' : ''].join(' ');
     return `<div class="${cls}" data-id="${r.id}">
-      <span class="entry-no">${i + 1}<small class="tid">${DR.esc(tagId(r.taskId))}</small>${r.carried ? '<small>이월</small>' : ''}${
+      <span class="entry-no">${i + 1}<small class="tid" title="과제번호">${tagIdHtml(r.taskId)}</small>${r.carried ? '<small>이월</small>' : ''}${
         !r.id.startsWith('tmp-') && r.editor && r.editor !== state.me ? `<small class="by">${DR.esc(r.editor)} 수정</small>` : ''
       }</span>
       <label class="cell c-part"><span class="cell-label">소속파트</span>${partSelect(r.part, dis)}</label>
@@ -213,7 +215,7 @@
     note: '',
     owners: state.me,
     ...fill,
-    taskId: fill.taskId || DR.taskId(),
+    taskId: fill.taskId || '', // 새 과제의 번호는 처음 저장할 때 파트·시각으로 만든다
   });
 
   // 오늘 내 보고가 아직 없으면, 가장 최근 보고의 미완료 과제를 회색(이월)으로 띄운다.
@@ -242,7 +244,7 @@
       const rows = (await store.list({ from: state.inDate, to: state.inDate })).filter((r) => involves(r));
       rows.sort(byTime);
       // 예전 데이터에 과제번호가 없으면 붙여 둔다 (다음 저장 때 함께 기록됨)
-      rows.forEach((r) => r.taskId || (r.taskId = DR.taskId()));
+      rows.forEach((r) => r.taskId || (r.taskId = DR.makeTaskId(r.part, new Date(r.createdAt))));
       state.server = rows;
       state.draft = rows.map((r) => ({ ...r }));
       if (editable() && !rows.some((r) => r.author === state.me)) await carryOver();
@@ -316,6 +318,10 @@
       const toUpdate = []; // [id, row]
       const conflicts = [];
       for (const d of creates) {
+        if (!d.taskId) {
+          toCreate.push(d); // 새 과제: 번호는 아래에서 실제로 저장할 때 부여
+          continue;
+        }
         const other = freshByTask.get(d.taskId);
         if (!other) toCreate.push(d);
         else if (!sameContent(d, other)) conflicts.push({ kind: 'create', mine: d, theirs: other });
@@ -348,6 +354,8 @@
       }
 
       const stamp = { editor: state.me };
+      // 등록 시점의 파트·일시로 과제번호 부여
+      toCreate.forEach((d) => d.taskId || (d.taskId = DR.makeTaskId(d.part)));
       if (toCreate.length)
         await store.create(toCreate.map((r) => ({ date: state.inDate, author: state.me, ...clean(r), ...stamp })));
       for (const [id, r] of toUpdate) await store.update(id, { ...clean(r), ...stamp });
@@ -501,7 +509,7 @@
     const picked = [...loader.picked.values()];
     if (!picked.length) return;
     state.draft = state.draft.filter((r) => !(r.id.startsWith('tmp-') && isBlank(r)));
-    const have = new Set(state.draft.map((r) => r.taskId));
+    const have = new Set(state.draft.map((r) => r.taskId).filter(Boolean));
     let added = 0;
     let dup = 0;
     picked.forEach((r) => {
