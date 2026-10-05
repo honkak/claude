@@ -48,7 +48,6 @@
         <input type="text" id="me-input" list="member-list" placeholder="이름" autocomplete="off" aria-label="이름">
         <button type="submit" class="btn primary">시작</button>
       </div>
-      <datalist id="member-list"></datalist>
     </form>
 
     <div id="in-body">
@@ -61,7 +60,7 @@
           <h2>업무 목록</h2>
         </header>
         <div class="entry entry-head" aria-hidden="true">
-          <span>#</span><span>소속파트</span><span>제목</span><span>내용</span><span>진행율</span><span>비고</span><span></span>
+          <span>#</span><span>소속파트</span><span>제목</span><span>내용</span><span>진행율</span><span>비고</span><span>담당자</span><span></span>
         </div>
         <div id="entries" class="entries"></div>
         <div class="add-row">
@@ -69,7 +68,6 @@
           <button type="button" class="btn add" id="open-loader">+ 지난 업무에서 불러오기</button>
         </div>
       </section>
-      <datalist id="part-list"></datalist>
 
       <div class="savebar">
         <span id="dirty-text" class="dirty-text"></span>
@@ -107,6 +105,8 @@
   </main>
 </div>
 
+<datalist id="member-list"></datalist>
+
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <div id="loader" class="dialog-backdrop" hidden>
@@ -128,7 +128,7 @@
           <option value="0">전체</option>
         </select>
       </label>
-      <input type="search" id="ldr-q" placeholder="제목·내용·파트 검색" aria-label="검색어">
+      <input type="search" id="ldr-q" placeholder="제목·내용·담당자 검색" aria-label="검색어">
     </div>
     <p id="ldr-count" class="meta"></p>
     <div id="ldr-list" class="loader-list"></div>

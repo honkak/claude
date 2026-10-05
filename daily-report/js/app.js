@@ -6,7 +6,7 @@
   const store = cfg.STORE === 'goodocs' ? DR.createGoodocsStore() : DR.createMockStore();
 
   // 구성원이 입력하는 칸 (저장·비교·내보내기에 공통 사용)
-  const FIELDS = ['part', 'title', 'content', 'progress', 'note'];
+  const FIELDS = ['part', 'title', 'content', 'progress', 'note', 'owners'];
 
   const state = {
     tab: DR.storage.get('dr-tab', 'input'),
@@ -34,6 +34,14 @@
     return m ? Math.min(100, Number(m[1])) : /완료/.test(v) ? 100 : null;
   };
   const isDone = (v) => percentOf(v) === 100;
+  // 담당자는 '김민준, 이서연'처럼 쉼표로 이어 저장한다. 비어 있으면 작성자가 담당자
+  const splitOwners = (s) => [...new Set(String(s ?? '').split(/[,，;/]/).map((x) => x.trim()).filter(Boolean))];
+  const ownersOf = (r) => {
+    const list = splitOwners(r.owners);
+    return list.length ? list : r.author ? [r.author] : [];
+  };
+  const NO_PART = '파트 미지정';
+  const partOf = (r) => String(r.part ?? '').trim() || NO_PART;
 
   /* ───────────── 공통 ───────────── */
 
@@ -103,6 +111,27 @@
     $('#save-btn').textContent = state.saving ? '저장 중…' : '저장';
   }
 
+  function partSelect(value, dis) {
+    const v = String(value ?? '').trim();
+    const opts = [...cfg.PARTS, ...(v && !cfg.PARTS.includes(v) ? [v] : [])];
+    return `<select data-f="part" aria-label="소속파트" class="${v ? '' : 'unset'}" ${dis}><option value="">파트 선택</option>${opts
+      .map((p) => `<option ${p === v ? 'selected' : ''}>${DR.esc(p)}</option>`)
+      .join('')}</select>`;
+  }
+
+  // 담당자: 이름 칩 + 이름 추가칸 (여러 명 가능)
+  function ownersHtml(r, ro) {
+    const chips = splitOwners(r.owners)
+      .map(
+        (n) =>
+          `<span class="chip">${DR.esc(n)}${ro ? '' : `<button type="button" data-rm-owner="${DR.esc(n)}" aria-label="${DR.esc(n)} 빼기">×</button>`}</span>`
+      )
+      .join('');
+    return `<div class="owners">${chips}${
+      ro ? '' : `<input type="text" class="owner-add" list="member-list" placeholder="+ 이름" aria-label="담당자 추가" autocomplete="off">`
+    }</div>`;
+  }
+
   function entryHtml(r, i, ro) {
     const dis = ro ? 'disabled' : '';
     const done = isDone(r.progress);
@@ -116,11 +145,12 @@
     const cls = ['entry', r.carried ? 'carried' : '', done ? 'is-done' : ''].join(' ');
     return `<div class="${cls}" data-id="${r.id}">
       <span class="entry-no">${i + 1}${r.carried ? '<small>이월</small>' : ''}</span>
-      <label class="cell c-part"><span class="cell-label">소속파트</span>${line('part', '소속파트', '예: 수변전', 'list="part-list"')}</label>
+      <label class="cell c-part"><span class="cell-label">소속파트</span>${partSelect(r.part, dis)}</label>
       ${area('title', '제목', '업무 제목 (여러 줄 가능)', 3)}
       ${area('content', '내용', '세부 내용', 3)}
       <div class="cell c-progress"><span class="cell-label">진행율</span>${line('progress', '진행율', '예: 70%')}${doneBtn}</div>
       ${area('note', '비고', '', 3)}
+      <div class="cell c-owners"><span class="cell-label">담당자</span>${ownersHtml(r, ro)}</div>
       ${ro ? '<span></span>' : '<button type="button" class="icon-btn del" data-del aria-label="이 업무 삭제">×</button>'}
     </div>`;
   }
@@ -164,6 +194,7 @@
     content: '',
     progress: '',
     note: '',
+    owners: state.me,
     ...fill,
   });
 
@@ -255,11 +286,12 @@
       const rows = await store.list({
         from: days ? DR.addDays(state.inDate, -days) : undefined,
         to: DR.addDays(state.inDate, -1),
-        author: who === '*' ? undefined : who,
       });
+      // 작성자이거나 담당자로 들어간 업무
+      const mine = who === '*' ? rows : rows.filter((r) => r.author === who || ownersOf(r).includes(who));
       // 같은 사람의 같은 업무는 여러 날 반복되므로, 가장 최근 것 하나만 남긴다
       const latest = new Map();
-      for (const r of rows) {
+      for (const r of mine) {
         const k = `${r.author}|${r.title.trim()}|${r.part.trim()}`;
         const cur = latest.get(k);
         if (!cur || r.date > cur.date) latest.set(k, r);
@@ -275,7 +307,7 @@
       const all = await fetchLoaderRows();
       const words = $('#ldr-q').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
       const hit = (r) => {
-        const hay = `${r.part} ${r.title} ${r.content} ${r.note}`.toLowerCase();
+        const hay = `${r.part} ${r.title} ${r.content} ${r.note} ${ownersOf(r).join(' ')}`.toLowerCase();
         return words.every((w) => hay.includes(w));
       };
       loader.items = all.filter(hit).slice(0, 200);
@@ -289,7 +321,7 @@
               const on = loader.picked.has(r.id);
               return `<label class="ldr-item ${on ? 'on' : ''}">
                 <input type="checkbox" data-i="${i}" ${on ? 'checked' : ''}>
-                <span class="ldr-meta">${DR.shortDate(r.date)} · ${DR.esc(r.author)}${r.part ? ` · ${DR.esc(r.part)}` : ''}${
+                <span class="ldr-meta">${DR.shortDate(r.date)} · ${DR.esc(ownersOf(r).join(', '))}${r.part ? ` · ${DR.esc(r.part)}` : ''}${
                   r.progress ? ` · <span class="${isDone(r.progress) ? 'ok' : ''}">${DR.esc(r.progress)}</span>` : ''
                 }</span>
                 <span class="ldr-title">${DR.esc(r.title)}</span>
@@ -380,7 +412,6 @@
     $('#in-today').onclick = () => goInputDate(DR.today());
     $('#add-entry').onclick = addEntry;
     $('#save-btn').onclick = save;
-    $('#part-list').innerHTML = cfg.PARTS.map((p) => `<option value="${DR.esc(p)}">`).join('');
 
     const box = $('#entries');
     const rowOf = (el) => state.draft.find((x) => x.id === el.closest('[data-id]')?.dataset.id);
@@ -389,6 +420,7 @@
       const r = rowOf(e.target);
       if (!f || !r) return;
       r[f] = e.target.value;
+      if (f === 'part') e.target.classList.toggle('unset', !r.part);
       if (r.carried) {
         r.carried = false; // 손댄 이월 업무는 검은 글자로
         e.target.closest('.entry').classList.remove('carried');
@@ -397,7 +429,39 @@
       if (e.target.tagName === 'TEXTAREA') autosize(e.target);
       updateSavebar();
     });
+    const addOwner = (input) => {
+      const r = rowOf(input);
+      const names = splitOwners(input.value);
+      if (!r || !names.length) return;
+      r.owners = splitOwners([r.owners, ...names].join(',')).join(', ');
+      r.carried = false;
+      renderInput();
+      $(`[data-id="${r.id}"] .owner-add`)?.focus();
+    };
+    box.addEventListener('keydown', (e) => {
+      if (!e.target.matches('.owner-add')) return;
+      if ((e.key === 'Enter' || e.key === ',') && !e.isComposing) {
+        e.preventDefault();
+        addOwner(e.target);
+      } else if (e.key === 'Backspace' && !e.target.value) {
+        const r = rowOf(e.target);
+        const list = splitOwners(r.owners);
+        list.pop();
+        r.owners = list.join(', ');
+        renderInput();
+        $(`[data-id="${r.id}"] .owner-add`)?.focus();
+      }
+    });
+    // 목록에서 이름을 고르거나 칸을 벗어나면 추가
+    box.addEventListener('change', (e) => e.target.matches('.owner-add') && addOwner(e.target));
     box.addEventListener('click', async (e) => {
+      const rm = e.target.closest('[data-rm-owner]');
+      if (rm) {
+        const r = rowOf(rm);
+        r.owners = splitOwners(r.owners).filter((n) => n !== rm.dataset.rmOwner).join(', ');
+        r.carried = false;
+        return renderInput();
+      }
       if (e.target.closest('[data-done]')) {
         const r = rowOf(e.target);
         if (isDone(r.progress)) r.progress = r.prevProgress ?? '';
@@ -444,13 +508,23 @@
     return { from: days[0], to: days[4] };
   }
 
-  // 설정의 팀원 순서 + 목록에 없는 작성자(전입 등)
-  function members(rows) {
-    const extra = [...new Set(rows.map((r) => r.author))].filter((a) => !cfg.MEMBERS.includes(a)).sort();
-    return [...cfg.MEMBERS, ...extra];
+  // 설정의 파트 순서 + 설정에 없는 파트 + 파트 미지정
+  function partList(rows) {
+    const used = [...new Set(rows.map(partOf))];
+    const extra = used.filter((p) => !cfg.PARTS.includes(p) && p !== NO_PART).sort();
+    return [...cfg.PARTS, ...extra, ...(used.includes(NO_PART) ? [NO_PART] : [])];
   }
 
-  const partMatch = (r) => !state.ld.part || r.part.trim() === state.ld.part;
+  // 작성했거나, 다른 사람 보고에 담당자로 들어가 있으면 제출로 본다
+  const submitted = (rows, name, date) =>
+    rows.some((r) => r.date === date && (r.author === name || ownersOf(r).includes(name)));
+
+  // 같은 파트 안에서는 담당자 순(설정의 팀원 순서) → 작성 순
+  const memberRank = (r) => {
+    const i = cfg.MEMBERS.indexOf(ownersOf(r)[0]);
+    return i < 0 ? 999 : i;
+  };
+  const byOwner = (a, b) => memberRank(a) - memberRank(b) || byTime(a, b);
 
   async function loadLeader() {
     const ld = state.ld;
@@ -475,64 +549,59 @@
     return `<div class="pbar" data-tone="${tone}"><span style="width:${p}%"></span></div><b>${DR.esc(v)}</b>`;
   }
 
+  const visibleParts = (rows) => partList(rows).filter((p) => !state.ld.part || p === state.ld.part);
+
   // 화면·복사·CSV가 같은 데이터를 쓴다
   function dayGroups() {
-    const ld = state.ld;
-    const rows = ld.rows.filter((r) => r.date === ld.date);
-    return members(rows)
-      .map((name) => {
-        const all = rows.filter((r) => r.author === name).sort(byTime);
-        return { name, submitted: all.length > 0, rows: all.filter(partMatch) };
-      })
-      .filter((g) => (ld.part ? g.rows.length : g.submitted || cfg.MEMBERS.includes(g.name)));
+    const rows = state.ld.rows.filter((r) => r.date === state.ld.date);
+    return visibleParts(rows).map((part) => ({ part, rows: rows.filter((r) => partOf(r) === part).sort(byOwner) }));
   }
 
   const multi = (s) => DR.esc(s); // 줄바꿈은 CSS(pre-wrap)로 살린다
+  const ownerChips = (r) => ownersOf(r).map((n) => `<span class="chip">${DR.esc(n)}</span>`).join('');
 
   function renderDay() {
-    const cols = ['이름', '소속파트', '제목', '내용', '진행율', '비고', '작성시각'];
+    const cols = ['소속파트', '제목', '내용', '진행율', '비고', '담당자', '작성시각'];
     let n = 0;
     const body = dayGroups()
       .map((g) => {
-        if (!g.submitted) {
+        const partCell = (span) =>
+          `<td class="part-group" rowspan="${span}"><b>${DR.esc(g.part)}</b><small>${g.rows.length}건</small></td>`;
+        if (!g.rows.length) {
           n++;
-          return `<tr class="missing group-end"><th class="rn">${n}</th><td class="name">${DR.esc(g.name)}</td><td colspan="6"><span class="pill pill-danger">미제출</span></td></tr>`;
+          return `<tr class="group-end empty-part"><th class="rn">${n}</th>${partCell(1)}<td colspan="6" class="muted">보고된 업무 없음</td></tr>`;
         }
         return g.rows
           .map((r, i) => {
             n++;
-            const nameCell = i === 0 ? `<td class="name" rowspan="${g.rows.length}">${DR.esc(g.name)}</td>` : '';
-            const end = i === g.rows.length - 1 ? ' class="group-end"' : '';
-            return `<tr${end}><th class="rn">${n}</th>${nameCell}
-              <td class="part">${DR.esc(r.part)}</td>
+            const cls = [i === g.rows.length - 1 ? 'group-end' : '', isDone(r.progress) ? 'is-done' : ''].join(' ');
+            return `<tr class="${cls}"><th class="rn">${n}</th>${i === 0 ? partCell(g.rows.length) : ''}
               <td class="title">${multi(r.title)}</td>
               <td class="content">${multi(r.content)}</td>
               <td class="prog">${progressHtml(r.progress)}</td>
               <td class="note">${multi(r.note)}</td>
+              <td class="owners-cell">${ownerChips(r)}</td>
               <td class="time">${DR.fmtTime(r.updatedAt || r.createdAt)}</td></tr>`;
           })
           .join('');
       })
       .join('');
-    const empty = `<tr><th class="rn">1</th><td colspan="7" class="grid-empty">이 파트의 보고가 없습니다.</td></tr>`;
     return `<table class="sheet sheet-day">
       <thead><tr class="letters"><th class="corner"></th>${cols.map((_, i) => `<th>${'ABCDEFG'[i]}</th>`).join('')}</tr>
       <tr><th class="corner"></th>${cols.map((c) => `<th>${c}</th>`).join('')}</tr></thead>
-      <tbody>${body || empty}</tbody></table>`;
+      <tbody>${body}</tbody></table>`;
   }
 
   function weekTable() {
     const ld = state.ld;
     const days = weekDays(ld.date);
-    return members(ld.rows)
-      .map((name) => ({
-        name,
-        cells: days.map((date) => {
-          const mine = ld.rows.filter((r) => r.author === name && r.date === date).sort(byTime);
-          return { date, submitted: mine.length > 0, items: mine.filter(partMatch) };
-        }),
-      }))
-      .filter((m) => !ld.part || m.cells.some((c) => c.items.length));
+    return visibleParts(ld.rows).map((part) => ({
+      part,
+      cells: days.map((date) => ({
+        date,
+        items: ld.rows.filter((r) => r.date === date && partOf(r) === part).sort(byOwner),
+      })),
+    }));
   }
 
   const firstLine = (s) => String(s || '').split('\n')[0];
@@ -544,20 +613,19 @@
       .map((m, i) => {
         const cells = m.cells
           .map((c) => {
-            if (!c.submitted)
-              return c.date <= t ? `<td class="wk missing-cell"><span class="pill pill-danger">미제출</span></td>` : `<td class="wk future"></td>`;
+            if (!c.items.length) return c.date <= t ? `<td class="wk"><span class="muted">-</span></td>` : `<td class="wk future"></td>`;
             const items = c.items
               .map(
                 (r) =>
-                  `<li><span class="wk-text">${DR.esc(firstLine(r.title) || firstLine(r.content))}</span><span class="wk-p ${isDone(r.progress) ? 'ok' : ''}">${DR.esc(r.progress)}</span>${
-                    r.note.trim() ? `<span class="wk-note">비고: ${DR.esc(firstLine(r.note))}</span>` : ''
-                  }</li>`
+                  `<li><span class="wk-text">${DR.esc(firstLine(r.title) || firstLine(r.content))}</span><span class="wk-p ${
+                    isDone(r.progress) ? 'ok' : ''
+                  }">${DR.esc(r.progress)}</span><span class="wk-owner">${DR.esc(ownersOf(r).join(', '))}</span></li>`
               )
               .join('');
-            return `<td class="wk"><button type="button" class="wk-open" data-go="${c.date}" aria-label="${DR.esc(m.name)} ${DR.shortDate(c.date)} 일간 보기"></button><ul>${items || '<li class="muted">-</li>'}</ul></td>`;
+            return `<td class="wk"><button type="button" class="wk-open" data-go="${c.date}" aria-label="${DR.esc(m.part)} ${DR.shortDate(c.date)} 일간 보기"></button><ul>${items}</ul></td>`;
           })
           .join('');
-        return `<tr><th class="rn">${i + 1}</th><td class="name">${DR.esc(m.name)}</td>${cells}</tr>`;
+        return `<tr><th class="rn">${i + 1}</th><td class="part-group"><b>${DR.esc(m.part)}</b></td>${cells}</tr>`;
       })
       .join('');
     const head = days
@@ -565,7 +633,7 @@
       .join('');
     return `<table class="sheet sheet-week">
       <thead><tr class="letters"><th class="corner"></th>${'ABCDEF'.split('').map((l) => `<th>${l}</th>`).join('')}</tr>
-      <tr><th class="corner"></th><th>이름</th>${head}</tr></thead>
+      <tr><th class="corner"></th><th>소속파트</th>${head}</tr></thead>
       <tbody>${rows}</tbody></table>`;
   }
 
@@ -574,32 +642,34 @@
     const total = cfg.MEMBERS.length;
     if (ld.mode === 'day') {
       const rows = ld.rows.filter((r) => r.date === ld.date);
-      const done = new Set(rows.map((r) => r.author));
-      const missing = cfg.MEMBERS.filter((m) => !done.has(m));
+      const missing = cfg.MEMBERS.filter((m) => !submitted(rows, m, ld.date));
       const sub = total - missing.length;
-      const parts = new Set(rows.map((r) => r.part.trim()).filter(Boolean));
-      const notes = rows.filter((r) => r.note.trim()).length;
+      const byPart = partList(rows).map((p) => [p, rows.filter((r) => partOf(r) === p).length]);
+      const done = rows.filter((r) => isDone(r.progress)).length;
       return `
         <div class="stat"><span class="stat-label">제출</span><span class="stat-val">${sub}<small>/${total}명</small></span>
           <span class="meter"><span style="width:${total ? (sub / total) * 100 : 0}%"></span></span></div>
         <div class="stat"><span class="stat-label">미제출</span><span class="chips">${
           missing.length ? missing.map((m) => `<span class="pill pill-danger">${DR.esc(m)}</span>`).join('') : '<span class="pill pill-ok">전원 제출</span>'
         }</span></div>
-        <div class="stat"><span class="stat-label">업무 / 파트</span><span class="stat-val">${rows.length}<small>건</small> · ${parts.size}<small>개 파트</small></span></div>
-        <div class="stat"><span class="stat-label">비고 작성</span><span class="stat-val ${notes ? 'warn' : ''}">${notes}<small>건</small></span></div>`;
+        <div class="stat"><span class="stat-label">파트별 업무</span><span class="chips">${byPart
+          .map(([p, n]) => `<span class="pill pill-part">${DR.esc(p)} <b>${n}</b></span>`)
+          .join('')}</span></div>
+        <div class="stat"><span class="stat-label">오늘 완료</span><span class="stat-val ok">${done}<small>/${rows.length}건</small></span></div>`;
     }
     const days = weekDays(ld.date).filter((d) => d <= DR.today());
     const expect = total * days.length;
-    const got = cfg.MEMBERS.reduce((s, m) => s + days.filter((d) => ld.rows.some((r) => r.author === m && r.date === d)).length, 0);
+    const got = cfg.MEMBERS.reduce((s, m) => s + days.filter((d) => submitted(ld.rows, m, d)).length, 0);
+    const done = ld.rows.filter((r) => isDone(r.progress)).length;
     return `
       <div class="stat"><span class="stat-label">주간 제출률 (오늘까지)</span><span class="stat-val">${expect ? Math.round((got / expect) * 100) : 0}<small>%</small></span>
         <span class="meter"><span style="width:${expect ? (got / expect) * 100 : 0}%"></span></span></div>
-      <div class="stat"><span class="stat-label">제출 건수 (사람 × 일)</span><span class="stat-val">${got}<small>/${expect}</small></span></div>
-      <div class="stat"><span class="stat-label">이번 주 업무</span><span class="stat-val">${ld.rows.length}<small>건</small></span></div>`;
+      <div class="stat"><span class="stat-label">제출 (사람 × 일)</span><span class="stat-val">${got}<small>/${expect}</small></span></div>
+      <div class="stat"><span class="stat-label">이번 주 완료</span><span class="stat-val ok">${done}<small>건</small></span></div>`;
   }
 
   function renderPartFilter() {
-    const parts = [...new Set([...cfg.PARTS, ...state.ld.rows.map((r) => r.part.trim()).filter(Boolean)])];
+    const parts = partList(state.ld.rows);
     if (state.ld.part && !parts.includes(state.ld.part)) parts.push(state.ld.part);
     $('#part-filter').innerHTML =
       `<option value="">전체</option>` +
@@ -623,23 +693,19 @@
   // 복사·CSV용 2차원 배열
   function exportRows() {
     if (state.ld.mode === 'day') {
-      const out = [['날짜', '이름', '소속파트', '제목', '내용', '진행율', '비고', '작성시각']];
-      for (const g of dayGroups()) {
-        if (!g.submitted) out.push([state.ld.date, g.name, '', '미제출', '', '', '', '']);
+      const out = [['날짜', '소속파트', '제목', '내용', '진행율', '비고', '담당자', '작성시각']];
+      for (const g of dayGroups())
         for (const r of g.rows)
-          out.push([r.date, g.name, r.part, r.title, r.content, r.progress, r.note, DR.fmtTime(r.updatedAt || r.createdAt)]);
-      }
+          out.push([r.date, g.part, r.title, r.content, r.progress, r.note, ownersOf(r).join(', '), DR.fmtTime(r.updatedAt || r.createdAt)]);
       return out;
     }
     const days = weekDays(state.ld.date);
-    const out = [['이름', ...days.map((d) => `${DR.weekdayName(d)} ${DR.shortDate(d)}`)]];
+    const out = [['소속파트', ...days.map((d) => `${DR.weekdayName(d)} ${DR.shortDate(d)}`)]];
     for (const m of weekTable())
       out.push([
-        m.name,
+        m.part,
         ...m.cells.map((c) =>
-          !c.submitted
-            ? c.date <= DR.today() ? '미제출' : ''
-            : c.items.map((r) => `${firstLine(r.title)}${r.progress ? ` (${r.progress})` : ''}`).join('\n')
+          c.items.map((r) => `${firstLine(r.title)}${r.progress ? ` (${r.progress})` : ''} - ${ownersOf(r).join(', ')}`).join('\n')
         ),
       ]);
     return out;

@@ -4,10 +4,10 @@
  * goodocs 어댑터와 똑같은 함수(list/create/update/remove)를 제공한다.
  */
 (function (DR) {
-  const KEY = 'dr-mock-rows-v3';
+  const KEY = 'dr-mock-rows-v4';
   let rows = null;
 
-  // 예시 업무: [소속파트, 제목, 내용]
+  // 예시 업무: [분야(참고용), 제목, 내용]
   const TASKS = [
     ['수변전', '154kV 변전소 정기점검\n- GIS 가스압력·부분방전', '1. GIS SF6 가스압력 측정: 전 구간 정상 (0.5MPa)\n2. 부분방전(UHF) 측정: 특이사항 없음\n3. 차단기 동작횟수 기록\n4. 점검 결과서 작성'],
     ['수변전', '변압기 TR-3 절연유 분석\n- 정기 샘플링', '- 절연유 샘플 채취 및 분석 의뢰\n- 유중가스(DGA) 결과: C2H2 미검출\n- 수분 12ppm (기준 이내)\n- 결과 이력표 갱신'],
@@ -46,14 +46,18 @@
       day = DR.shiftWorkday(day, -1);
     }
     const active = Object.fromEntries(cfg.MEMBERS.map((m) => [m, []]));
-    const newTask = () => {
-      const [part, title, content] = pick(rand, TASKS);
-      return { part, title, content, p: 10 * (1 + Math.floor(rand() * 3)), note: pick(rand, NOTES) };
+    // 예시용: 구성원을 파트에 고르게 배정
+    const partOf = Object.fromEntries(cfg.MEMBERS.map((m, i) => [m, cfg.PARTS[i % cfg.PARTS.length]]));
+    const newTask = (author) => {
+      const [, title, content] = pick(rand, TASKS);
+      const mates = cfg.MEMBERS.filter((m) => m !== author && partOf[m] === partOf[author]);
+      const owners = rand() < 0.3 && mates.length ? [author, pick(rand, mates)] : [author];
+      return { part: partOf[author], title, content, owners: owners.join(', '), p: 10 * (1 + Math.floor(rand() * 3)), note: pick(rand, NOTES) };
     };
     days.forEach((date) => {
       cfg.MEMBERS.forEach((author) => {
         const list = active[author];
-        while (list.length < 2 + (rand() < 0.4 ? 1 : 0)) list.push(newTask());
+        while (list.length < 2 + (rand() < 0.4 ? 1 : 0)) list.push(newTask(author));
         if (rand() < 0.06) return; // 가끔 미제출
         const at = new Date(DR.parseDate(date).setHours(16 + Math.floor(rand() * 3), Math.floor(rand() * 60))).toISOString();
         list.forEach((t) => {
@@ -67,6 +71,7 @@
             content: t.content,
             progress: t.p >= 100 ? '완료' : `${t.p}%`,
             note: t.p >= 100 ? '' : t.note,
+            owners: t.owners,
             createdAt: at,
             updatedAt: at,
           });
