@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>팀 일일업무보고</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <div>
+        <h1>일일업무보고</h1>
+        <p id="team-name" class="brand-sub"></p>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="화면 선택">
+      <button type="button" role="tab" id="tab-input" data-tab="input">내 업무 입력</button>
+      <button type="button" role="tab" id="tab-leader" data-tab="leader">팀 현황</button>
+    </nav>
+    <span id="store-badge" class="store-badge"></span>
+  </header>
+
+  <div id="config-error" class="banner banner-error" hidden></div>
+
+  <!-- 팀원: 내 업무 입력 -->
+  <main id="view-input" class="view" role="tabpanel" aria-labelledby="tab-input">
+    <div class="toolbar">
+      <label class="field">
+        <span>작성자</span>
+        <select id="me-select"></select>
+      </label>
+      <div class="date-nav" role="group" aria-label="보고 날짜">
+        <button type="button" class="icon-btn" id="in-prev" aria-label="이전 근무일">‹</button>
+        <input type="date" id="in-date" aria-label="보고 날짜">
+        <button type="button" class="icon-btn" id="in-next" aria-label="다음 근무일">›</button>
+        <button type="button" class="btn ghost" id="in-today">오늘</button>
+      </div>
+    </div>
+
+    <div id="in-empty" class="empty-state" hidden>
+      <strong>작성자를 먼저 선택하세요.</strong>
+      <span>선택한 이름은 이 PC에 기억되어 다음부터 바로 입력할 수 있습니다.</span>
+    </div>
+
+    <div id="in-body">
+      <p id="in-heading" class="report-heading"></p>
+      <div id="in-notice" class="banner banner-info" hidden></div>
+
+      <section class="block">
+        <header class="block-head">
+          <h2>오늘 한 일</h2>
+          <button type="button" class="btn ghost" id="pull-plan">어제 계획 불러오기</button>
+        </header>
+        <div class="row-head row-today" aria-hidden="true">
+          <span>업무 내용</span><span>진행률</span><span>이슈 · 지원요청</span><span></span>
+        </div>
+        <div id="rows-today" class="rows"></div>
+        <button type="button" class="btn add" data-add="오늘">+ 업무 추가</button>
+      </section>
+
+      <section class="block">
+        <header class="block-head">
+          <h2>내일 할 일</h2>
+        </header>
+        <div id="rows-plan" class="rows"></div>
+        <button type="button" class="btn add" data-add="내일">+ 계획 추가</button>
+      </section>
+
+      <div class="savebar">
+        <span id="dirty-text" class="dirty-text"></span>
+        <button type="button" class="btn primary" id="save-btn">저장</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- 팀장: 팀 현황 -->
+  <main id="view-leader" class="view" role="tabpanel" aria-labelledby="tab-leader" hidden>
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="보기 방식">
+        <button type="button" data-mode="day">일간</button>
+        <button type="button" data-mode="week">주간</button>
+      </div>
+      <div class="date-nav" role="group" aria-label="조회 날짜">
+        <button type="button" class="icon-btn" id="ld-prev" aria-label="이전">‹</button>
+        <input type="date" id="ld-date" aria-label="조회 날짜">
+        <button type="button" class="icon-btn" id="ld-next" aria-label="다음">›</button>
+        <button type="button" class="btn ghost" id="ld-today">오늘</button>
+      </div>
+      <label class="check"><input type="checkbox" id="issues-only"> 이슈만 보기</label>
+      <span class="spacer"></span>
+      <button type="button" class="btn" id="copy-tsv">엑셀로 복사</button>
+      <button type="button" class="btn" id="dl-csv">CSV 저장</button>
+      <button type="button" class="btn" id="ld-refresh">새로고침</button>
+    </div>
+
+    <div id="summary" class="summary"></div>
+    <div id="grid" class="grid-wrap"></div>
+    <p id="loaded-at" class="meta"></p>
+  </main>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<div id="dialog" class="dialog-backdrop" hidden>
+  <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-msg">
+    <p id="dialog-msg" class="dialog-msg"></p>
+    <div class="dialog-actions">
+      <button type="button" class="btn" data-act="cancel">취소</button>
+      <button type="button" class="btn primary" data-act="ok">확인</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/store-mock.js"></script>
+<script src="js/store-goodocs.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
