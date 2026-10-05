@@ -31,6 +31,7 @@
       <div class="whoami" id="whoami" hidden>
         <span class="whoami-label">작성자</span>
         <strong id="me-name"></strong>
+        <select id="my-part" aria-label="내 소속파트"></select>
         <button type="button" class="btn ghost small" id="me-change">변경</button>
       </div>
       <div class="date-nav" role="group" aria-label="보고 날짜">
@@ -42,10 +43,11 @@
     </div>
 
     <form id="me-setup" class="empty-state">
-      <strong>처음 한 번만 이름을 입력하세요.</strong>
-      <span>입력한 이름은 이 PC의 크롬에 저장되어, 다음부터는 바로 업무를 입력할 수 있습니다.</span>
+      <strong>처음 한 번만 이름과 소속파트를 입력하세요.</strong>
+      <span>이 PC의 크롬에 저장되어, 다음부터는 바로 업무를 입력할 수 있습니다. 새 업무의 소속파트와 담당자도 이 값으로 미리 채워집니다.</span>
       <div class="setup-row">
         <input type="text" id="me-input" list="member-list" placeholder="이름" autocomplete="off" aria-label="이름">
+        <select id="setup-part" aria-label="소속파트"></select>
         <button type="submit" class="btn primary">시작</button>
       </div>
     </form>

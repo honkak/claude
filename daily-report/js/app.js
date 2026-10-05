@@ -11,6 +11,7 @@
   const state = {
     tab: DR.storage.get('dr-tab', 'input'),
     me: DR.storage.get('dr-me', ''),
+    myPart: '',
     inDate: DR.today(),
     server: [], // 서버에 저장된 내 행
     draft: [], // 화면에서 편집 중인 내 행
@@ -25,6 +26,15 @@
       loading: false,
     },
   };
+
+  state.myPart = DR.storage.get(`dr-part:${state.me}`, '');
+
+  // 담당자로 쓴 이름은 기억해 두었다가 자동완성에 함께 보여준다
+  const knownNames = () => [...new Set([...cfg.MEMBERS, ...DR.storage.get('dr-names', [])])];
+  function rememberNames(names) {
+    DR.storage.set('dr-names', [...new Set([...names, ...DR.storage.get('dr-names', [])])].slice(0, 50));
+    $('#member-list').innerHTML = knownNames().map((m) => `<option value="${DR.esc(m)}">`).join('');
+  }
 
   const byTime = (a, b) => String(a.createdAt).localeCompare(String(b.createdAt));
   const isBlank = (r) => !r.title.trim() && !r.content.trim();
@@ -161,6 +171,9 @@
     $('#whoami').hidden = !hasMe;
     $('#in-body').hidden = !hasMe;
     $('#me-name').textContent = state.me;
+    $('#my-part').innerHTML = partOptions(state.myPart);
+    $('#my-part').classList.toggle('unset', !state.myPart);
+    if (!$('#setup-part').options.length) $('#setup-part').innerHTML = partOptions('');
     $('#in-date').value = state.inDate;
     if (!hasMe) return;
 
@@ -182,8 +195,8 @@
   }
 
   // 새 행의 소속파트는 직전에 쓴 파트로 미리 채운다
-  const lastPart = () =>
-    [...state.draft].reverse().find((r) => r.part.trim())?.part || DR.storage.get(`dr-part:${state.me}`, '');
+  // 새 행의 소속파트: 저장해 둔 내 파트 → 없으면 직전 행의 파트
+  const lastPart = () => state.myPart || [...state.draft].reverse().find((r) => r.part.trim())?.part || '';
 
   const blank = (fill = {}) => ({
     id: DR.tmpId(),
@@ -245,8 +258,6 @@
       if (creates.length) await store.create(creates.map((r) => ({ date: state.inDate, author: state.me, ...clean(r) })));
       for (const r of updates) await store.update(r.id, clean(r));
       for (const id of removes) await store.remove(id);
-      const part = lastPart();
-      if (part) DR.storage.set(`dr-part:${state.me}`, part);
       DR.toast('저장했습니다.');
       await loadMine();
     } catch (e) {
@@ -269,10 +280,23 @@
     loadMine();
   }
 
-  function setMe(name) {
+  // 이름과 내 소속파트는 브라우저(크롬)에 저장해 다음에도 그대로 쓴다
+  function setMe(name, part) {
     state.me = name;
     DR.storage.set('dr-me', name);
+    if (part !== undefined) setMyPart(part);
+    else state.myPart = DR.storage.get(`dr-part:${name}`, '');
   }
+  function setMyPart(part) {
+    state.myPart = part;
+    if (state.me) DR.storage.set(`dr-part:${state.me}`, part);
+    // 아직 파트를 고르지 않은 행은 바로 채워 준다
+    state.draft.forEach((r) => {
+      if (!r.part.trim()) r.part = part;
+    });
+  }
+  const partOptions = (v) =>
+    `<option value="">파트 선택</option>` + cfg.PARTS.map((p) => `<option ${p === v ? 'selected' : ''}>${DR.esc(p)}</option>`).join('');
 
   /* ── 지난 업무에서 불러오기 ── */
 
@@ -389,22 +413,36 @@
   }
 
   function bindInput() {
-    $('#member-list').innerHTML = cfg.MEMBERS.map((m) => `<option value="${DR.esc(m)}">`).join('');
+    rememberNames([]);
     $('#me-setup').addEventListener('submit', (e) => {
       e.preventDefault();
       const name = $('#me-input').value.trim();
       if (!name) return $('#me-input').focus();
-      setMe(name);
+      setMe(name, $('#setup-part').value || DR.storage.get(`dr-part:${name}`, ''));
+      rememberNames([name]);
       loadMine();
+    });
+    // 예전에 이 PC에서 쓴 이름이면 그때의 파트를 미리 골라 준다
+    $('#me-input').addEventListener('input', (e) => {
+      const saved = DR.storage.get(`dr-part:${e.target.value.trim()}`, '');
+      if (saved) $('#setup-part').value = saved;
+    });
+    $('#my-part').addEventListener('change', (e) => {
+      setMyPart(e.target.value);
+      renderInput();
+      DR.toast(e.target.value ? `내 소속파트를 ${e.target.value}(으)로 저장했습니다.` : '내 소속파트를 비웠습니다.');
     });
     $('#me-change').onclick = async () => {
       if (!(await guard())) return;
-      setMe('');
+      const prev = state.me;
+      setMe('', '');
+      state.myPart = '';
       state.server = [];
       state.draft = [];
       renderInput();
-      $('#me-input').value = '';
-      $('#me-input').focus();
+      $('#me-input').value = prev;
+      $('#setup-part').value = DR.storage.get(`dr-part:${prev}`, '');
+      $('#me-input').select();
     };
     $('#in-date').addEventListener('change', (e) => goInputDate(e.target.value));
     $('#in-prev').onclick = () => goInputDate(DR.shiftWorkday(state.inDate, -1));
@@ -434,6 +472,7 @@
       const names = splitOwners(input.value);
       if (!r || !names.length) return;
       r.owners = splitOwners([r.owners, ...names].join(',')).join(', ');
+      rememberNames(names);
       r.carried = false;
       renderInput();
       $(`[data-id="${r.id}"] .owner-add`)?.focus();
@@ -515,9 +554,11 @@
     return [...cfg.PARTS, ...extra, ...(used.includes(NO_PART) ? [NO_PART] : [])];
   }
 
-  // 작성했거나, 다른 사람 보고에 담당자로 들어가 있으면 제출로 본다
-  const submitted = (rows, name, date) =>
-    rows.some((r) => r.date === date && (r.author === name || ownersOf(r).includes(name)));
+  // 보고에 이름이 나온 사람(작성자 + 담당자). 모든 사람이 따로 쓸 필요는 없다
+  const peopleIn = (rows) => {
+    const set = new Set(rows.flatMap((r) => [r.author, ...ownersOf(r)]).filter(Boolean));
+    return [...cfg.MEMBERS.filter((m) => set.has(m)), ...[...set].filter((m) => !cfg.MEMBERS.includes(m)).sort()];
+  };
 
   // 같은 파트 안에서는 담당자 순(설정의 팀원 순서) → 작성 순
   const memberRank = (r) => {
@@ -639,33 +680,20 @@
 
   function renderSummary() {
     const ld = state.ld;
-    const total = cfg.MEMBERS.length;
-    if (ld.mode === 'day') {
-      const rows = ld.rows.filter((r) => r.date === ld.date);
-      const missing = cfg.MEMBERS.filter((m) => !submitted(rows, m, ld.date));
-      const sub = total - missing.length;
-      const byPart = partList(rows).map((p) => [p, rows.filter((r) => partOf(r) === p).length]);
-      const done = rows.filter((r) => isDone(r.progress)).length;
-      return `
-        <div class="stat"><span class="stat-label">제출</span><span class="stat-val">${sub}<small>/${total}명</small></span>
-          <span class="meter"><span style="width:${total ? (sub / total) * 100 : 0}%"></span></span></div>
-        <div class="stat"><span class="stat-label">미제출</span><span class="chips">${
-          missing.length ? missing.map((m) => `<span class="pill pill-danger">${DR.esc(m)}</span>`).join('') : '<span class="pill pill-ok">전원 제출</span>'
-        }</span></div>
-        <div class="stat"><span class="stat-label">파트별 업무</span><span class="chips">${byPart
-          .map(([p, n]) => `<span class="pill pill-part">${DR.esc(p)} <b>${n}</b></span>`)
-          .join('')}</span></div>
-        <div class="stat"><span class="stat-label">오늘 완료</span><span class="stat-val ok">${done}<small>/${rows.length}건</small></span></div>`;
-    }
-    const days = weekDays(ld.date).filter((d) => d <= DR.today());
-    const expect = total * days.length;
-    const got = cfg.MEMBERS.reduce((s, m) => s + days.filter((d) => submitted(ld.rows, m, d)).length, 0);
-    const done = ld.rows.filter((r) => isDone(r.progress)).length;
+    const rows = ld.mode === 'day' ? ld.rows.filter((r) => r.date === ld.date) : ld.rows;
+    const byPart = partList(rows).map((p) => [p, rows.filter((r) => partOf(r) === p).length]);
+    const done = rows.filter((r) => isDone(r.progress)).length;
+    const people = peopleIn(rows);
+    const authors = new Set(rows.map((r) => r.author)).size;
     return `
-      <div class="stat"><span class="stat-label">주간 제출률 (오늘까지)</span><span class="stat-val">${expect ? Math.round((got / expect) * 100) : 0}<small>%</small></span>
-        <span class="meter"><span style="width:${expect ? (got / expect) * 100 : 0}%"></span></span></div>
-      <div class="stat"><span class="stat-label">제출 (사람 × 일)</span><span class="stat-val">${got}<small>/${expect}</small></span></div>
-      <div class="stat"><span class="stat-label">이번 주 완료</span><span class="stat-val ok">${done}<small>건</small></span></div>`;
+      <div class="stat"><span class="stat-label">${ld.mode === 'day' ? '업무' : '이번 주 업무'}</span><span class="stat-val">${rows.length}<small>건 · 작성 ${authors}명</small></span></div>
+      <div class="stat"><span class="stat-label">파트별 업무</span><span class="chips">${byPart
+        .map(([p, n]) => `<span class="pill pill-part">${DR.esc(p)} <b>${n}</b></span>`)
+        .join('')}</span></div>
+      <div class="stat"><span class="stat-label">${ld.mode === 'day' ? '오늘 완료' : '이번 주 완료'}</span><span class="stat-val ok">${done}<small>/${rows.length}건</small></span></div>
+      <div class="stat"><span class="stat-label">담당자</span><span class="chips">${
+        people.length ? people.map((m) => `<span class="chip">${DR.esc(m)}</span>`).join('') : '<span class="muted">보고 없음</span>'
+      }</span></div>`;
   }
 
   function renderPartFilter() {

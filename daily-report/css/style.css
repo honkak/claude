@@ -339,6 +339,8 @@ select.unset { color: var(--muted); }
 .whoami { display: flex; align-items: center; gap: 8px; }
 .whoami-label { color: var(--muted); font-size: 13px; font-weight: 600; }
 .whoami strong { font-size: 15px; }
+.whoami select { height: 30px; }
+.setup-row select { width: 130px; }
 .btn.small { height: 28px; padding: 0 8px; font-size: 13px; }
 .setup-row { display: flex; gap: 8px; margin-top: 8px; }
 .setup-row input { width: 200px; }
