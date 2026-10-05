@@ -4,32 +4,31 @@
  * goodocs 어댑터와 똑같은 함수(list/create/update/remove)를 제공한다.
  */
 (function (DR) {
-  const KEY = 'dr-mock-rows-v1';
+  const KEY = 'dr-mock-rows-v2';
   let rows = null;
 
+  // 예시 업무: [소속파트, 제목, 내용]
   const TASKS = [
-    '냉각수 펌프 #3 진동 점검',
-    '공조기 AHU-12 필터 교체 일정 협의',
-    '월간 전력 사용량 보고서 작성',
-    '배기 스크러버 약품 투입량 확인',
-    '협력사 작업허가서 검토',
-    '수처리 pH 센서 교정',
-    '신규 라인 전기 부하 계산',
-    '설비 PM 일정표 업데이트',
-    '안전 점검 체크리스트 정리',
-    '냉동기 부품 견적 비교',
-    'BIM 모델 배관 간섭 검토',
-    'PLC 알람 이력 분석',
-    '가스 누출 감지기 정기 점검',
-    '변전실 열화상 측정',
+    ['공조', '공조기 AHU-12 필터 교체\n- 차압 상승 알람 대응', '1. 차압 측정: 전단 180Pa → 기준 150Pa 초과\n2. 필터 재고 확인: 프리필터 12EA, 미디엄 6EA\n3. 교체 일정 협의: 10/8(수) 야간\n4. 생산팀 공지 요청 완료'],
+    ['전기', '신규 라인 전기 부하 계산\n- 2차 변경안 반영', '- 설비 리스트 rev.3 기준 재산정\n- 총 부하 1,240kW → 1,315kW (+75kW)\n- 변압기 TR-3 여유율 18% → 12%\n- 분전반 MCC-07 차단기 용량 검토 필요\n- 결과 보고서 초안 작성 중'],
+    ['배기', '스크러버 약품 투입량 점검', '- 일 평균 투입량 42L (전주 대비 +8%)\n- pH 제어 편차 확인: 설정 7.0 / 실측 6.6~7.4\n- 투입 펌프 스트로크 조정 예정'],
+    ['수처리', '수처리 pH 센서 교정\n- 3개 지점', '- 1차 반응조, 2차 반응조, 방류조 센서 교정\n- 표준액 pH 4 / 7 / 10 사용\n- 방류조 센서 응답 지연 → 교체 검토\n- 교정 기록서 작성 완료'],
+    ['가스', '가스 누출 감지기 정기 점검', '- 대상 24개소 중 18개소 완료\n- 감도 이상 1개소 (B동 2층) → 업체 수리 요청\n- 잔여 6개소 내일 진행'],
+    ['전기', '변전실 열화상 측정', '- 수배전반 12면 측정\n- 최고 온도 48℃ (기준 이내)\n- 측정 사진 정리 후 공유 예정'],
+    ['공조', '냉동기 부품 견적 비교\n- 압축기 오버홀 부품', '- 3개 업체 견적 접수\n  A사 3,200만원 / B사 2,950만원 / C사 3,480만원\n- 납기: A사 4주, B사 6주, C사 3주\n- 기술 사양 비교표 작성 중\n- 구매팀 검토 요청 예정'],
+    ['건설기획', 'BIM 모델 배관 간섭 검토\n- 3층 유틸리티 구간', '- 간섭 23건 검출\n- 중대 간섭 4건: 덕트 vs 케이블트레이\n- 설계사에 수정 요청 송부\n- 회신 후 재검토 일정 수립'],
+    ['전기', 'PLC 알람 이력 분석\n- 9월분', '- 총 알람 1,532건\n- 상위 3개 알람이 전체의 61%\n- 반복 알람 원인: 센서 채터링 추정\n- 필터 타이머 적용 검토'],
+    ['공조', '설비 PM 일정표 업데이트', '- 4분기 PM 일정 확정\n- 협력사 인력 배정 협의 완료'],
   ];
-  const ISSUES = ['업체 회신 대기', '부품 납기 2주 지연, 대체품 검토 필요', '현장 출입 승인 필요', '예산 확인 요청'];
+  const NOTES = ['', '', '', '업체 회신 대기', '부품 납기 2주 지연, 대체품 검토 필요', '현장 출입 승인 필요', '예산 확인 요청'];
+  const PROGRESS = ['30%', '50%', '70%', '80%', '100%', '완료', '진행중'];
 
   // 새로고침해도 같은 예시가 나오도록 고정 시드 난수 사용
   function rng(seed) {
     let s = seed;
     return () => (s = (s * 1103515245 + 12345) % 2147483648) / 2147483648;
   }
+  const pick = (rand, arr) => arr[Math.floor(rand() * arr.length)];
 
   function seed() {
     const cfg = window.APP_CONFIG;
@@ -47,34 +46,24 @@
       cfg.MEMBERS.forEach((author, mi) => {
         if (isLast && mi >= 4) return; // 오늘은 일부만 제출한 상태로 시작
         if (!isLast && rand() < 0.08) return; // 과거에도 가끔 미제출
-        const hour = 16 + Math.floor(rand() * 3);
-        const at = new Date(DR.parseDate(date).setHours(hour, Math.floor(rand() * 60)));
+        const at = new Date(DR.parseDate(date).setHours(16 + Math.floor(rand() * 3), Math.floor(rand() * 60)));
         const stamp = at.toISOString();
-        const n = 2 + Math.floor(rand() * 2);
+        const n = 1 + Math.floor(rand() * 3);
         for (let k = 0; k < n; k++) {
+          const [part, title, content] = pick(rand, TASKS);
           out.push({
             id: 'm-' + out.length,
             date,
             author,
-            kind: '오늘',
-            content: TASKS[Math.floor(rand() * TASKS.length)],
-            progress: Math.min(100, Math.floor(rand() * 11) * 10 + 20),
-            issue: rand() < 0.15 ? ISSUES[Math.floor(rand() * ISSUES.length)] : '',
+            part,
+            title,
+            content,
+            progress: pick(rand, PROGRESS),
+            note: pick(rand, NOTES),
             createdAt: stamp,
             updatedAt: stamp,
           });
         }
-        out.push({
-          id: 'm-' + out.length,
-          date,
-          author,
-          kind: '내일',
-          content: TASKS[Math.floor(rand() * TASKS.length)],
-          progress: null,
-          issue: '',
-          createdAt: stamp,
-          updatedAt: stamp,
-        });
       });
     });
     return out;

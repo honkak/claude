@@ -43,10 +43,11 @@
   const COLUMNS = {
     date: '날짜',
     author: '작성자',
-    kind: '구분', // '오늘' 또는 '내일'
-    content: '업무내용',
-    progress: '진행률', // 0~100 숫자, '내일' 행은 빈칸
-    issue: '이슈',
+    part: '소속파트',
+    title: '제목',
+    content: '내용',
+    progress: '진행율', // 자유입력 문자열 (예: 70%, 완료)
+    note: '비고',
     createdAt: '작성시각',
     updatedAt: '수정시각',
   };
@@ -73,9 +74,8 @@
     const values = rec.values || rec;
     const row = { id: String(rec.rowId ?? rec.id ?? rec._id) };
     for (const [field, col] of Object.entries(COLUMNS)) row[field] = values[col] ?? '';
+    for (const f of ['part', 'title', 'content', 'progress', 'note']) row[f] = String(row[f]);
     row.date = normalizeDate(row.date);
-    row.kind = row.kind === '내일' ? '내일' : '오늘';
-    row.progress = row.progress === '' || row.progress == null ? null : Number(row.progress);
     return row;
   }
   const recordsOf = (res) => (Array.isArray(res) ? res : res?.rows || res?.data || res?.items || []);

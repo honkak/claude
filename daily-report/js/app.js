@@ -5,6 +5,9 @@
 
   const store = cfg.STORE === 'goodocs' ? DR.createGoodocsStore() : DR.createMockStore();
 
+  // 구성원이 입력하는 칸 (저장·비교·내보내기에 공통 사용)
+  const FIELDS = ['part', 'title', 'content', 'progress', 'note'];
+
   const state = {
     tab: DR.storage.get('dr-tab', 'input'),
     me: DR.storage.get('dr-me', ''),
@@ -15,7 +18,7 @@
     ld: {
       mode: DR.storage.get('dr-ld-mode', 'day'),
       date: DR.today(),
-      issuesOnly: false,
+      part: '',
       rows: [],
       loadedAt: null,
       loading: false,
@@ -23,9 +26,13 @@
   };
   if (!cfg.MEMBERS.includes(state.me)) state.me = '';
 
-  const PROGRESS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-  const byKindThenTime = (a, b) =>
-    (a.kind === b.kind ? 0 : a.kind === '오늘' ? -1 : 1) || String(a.createdAt).localeCompare(String(b.createdAt));
+  const byTime = (a, b) => String(a.createdAt).localeCompare(String(b.createdAt));
+  const isBlank = (r) => !r.title.trim() && !r.content.trim();
+  // 진행율은 자유입력. 숫자로 읽히면(예: 70, 70%) 막대도 그린다
+  const percentOf = (v) => {
+    const m = String(v ?? '').trim().match(/^(\d{1,3})\s*%?$/);
+    return m ? Math.min(100, Number(m[1])) : /완료/.test(v) ? 100 : null;
+  };
 
   /* ───────────── 공통 ───────────── */
 
@@ -36,6 +43,7 @@
     $('#view-input').hidden = tab !== 'input';
     $('#view-leader').hidden = tab !== 'leader';
     if (tab === 'leader') loadLeader();
+    else autosizeAll();
   }
 
   function showError(err) {
@@ -43,9 +51,17 @@
     DR.toast(err.message || String(err), 'error');
   }
 
-  /* ───────────── 팀원: 내 업무 입력 ───────────── */
+  // 글자 수만큼 칸이 늘어나는 입력칸
+  function autosize(el) {
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 2 + 'px';
+  }
+  const autosizeAll = () => $$('#entries textarea').forEach(autosize);
+
+  /* ───────────── 구성원: 내 업무 입력 ───────────── */
 
   const editable = () => state.inDate >= DR.addDays(DR.today(), -cfg.EDIT_PAST_DAYS);
+  const clean = (r) => Object.fromEntries(FIELDS.map((f) => [f, String(r[f] ?? '').trim()]));
 
   function diff() {
     const serverById = new Map(state.server.map((r) => [r.id, r]));
@@ -54,19 +70,18 @@
     const updates = [];
     const removes = [];
     for (const d of state.draft) {
-      const content = d.content.trim();
       if (d.id.startsWith('tmp-')) {
-        if (content) creates.push(d);
+        if (!isBlank(d)) creates.push(d);
         continue;
       }
       keep.add(d.id);
       const s = serverById.get(d.id);
-      if (!content) removes.push(d.id);
-      else if (
-        s &&
-        (s.content !== content || s.kind !== d.kind || (s.progress ?? null) !== (d.progress ?? null) || (s.issue || '') !== d.issue.trim())
-      )
-        updates.push(d);
+      if (isBlank(d)) removes.push(d.id);
+      else if (s) {
+        const a = clean(d);
+        const b = clean(s);
+        if (FIELDS.some((f) => a[f] !== b[f])) updates.push(d);
+      }
     }
     for (const s of state.server) if (!keep.has(s.id)) removes.push(s.id);
     return { creates, updates, removes, count: creates.length + updates.length + removes.length };
@@ -87,25 +102,25 @@
     $('#save-btn').textContent = state.saving ? '저장 중…' : '저장';
   }
 
-  function rowHtml(r, ro) {
+  function entryHtml(r, i, ro) {
     const dis = ro ? 'disabled' : '';
-    const content = `<input type="text" class="cell-content" data-f="content" value="${DR.esc(r.content)}" placeholder="${
-      r.kind === '오늘' ? '예: 냉각수 펌프 #3 진동 점검' : '내일 할 업무'
-    }" aria-label="업무 내용" ${dis}>`;
-    const del = ro ? '<span></span>' : `<button type="button" class="icon-btn del" data-del aria-label="행 삭제">×</button>`;
-    if (r.kind === '내일') return `<div class="row row-plan" data-id="${r.id}">${content}${del}</div>`;
-    const opts = PROGRESS.map((p) => `<option value="${p}" ${r.progress === p ? 'selected' : ''}>${p}%</option>`).join('');
-    return `<div class="row row-today" data-id="${r.id}">
-      ${content}
-      <select data-f="progress" aria-label="진행률" ${dis}>${opts}</select>
-      <input type="text" data-f="issue" value="${DR.esc(r.issue)}" placeholder="없으면 비워두기" aria-label="이슈·지원요청" ${dis}>
-      ${del}
+    const area = (f, label, ph, rows) =>
+      `<label class="cell c-${f}"><span class="cell-label">${label}</span><textarea data-f="${f}" rows="${rows}" placeholder="${ph}" ${dis}>${DR.esc(r[f])}</textarea></label>`;
+    const line = (f, label, ph, extra = '') =>
+      `<label class="cell c-${f}"><span class="cell-label">${label}</span><input type="text" data-f="${f}" value="${DR.esc(r[f])}" placeholder="${ph}" ${extra} ${dis}></label>`;
+    return `<div class="entry" data-id="${r.id}">
+      <span class="entry-no">${i + 1}</span>
+      ${line('part', '소속파트', '예: 공조', 'list="part-list"')}
+      ${area('title', '제목', '업무 제목 (여러 줄 가능)', 3)}
+      ${area('content', '내용', '세부 내용', 3)}
+      ${line('progress', '진행율', '예: 70%')}
+      ${area('note', '비고', '', 3)}
+      ${ro ? '<span></span>' : '<button type="button" class="icon-btn del" data-del aria-label="이 업무 삭제">×</button>'}
     </div>`;
   }
 
   function renderInput() {
-    const sel = $('#me-select');
-    sel.innerHTML =
+    $('#me-select').innerHTML =
       `<option value="">이름 선택</option>` +
       cfg.MEMBERS.map((m) => `<option ${m === state.me ? 'selected' : ''}>${DR.esc(m)}</option>`).join('');
     $('#in-date').value = state.inDate;
@@ -115,28 +130,40 @@
 
     const ro = !editable();
     $('#in-heading').textContent = `${DR.labelDate(state.inDate)} · ${state.me}`;
-    const notice = $('#in-notice');
-    notice.hidden = !ro;
-    notice.textContent = ro ? '지난 날짜의 보고입니다. 수정이 필요하면 팀장에게 요청하세요.' : '';
-
-    for (const [kind, box] of [['오늘', '#rows-today'], ['내일', '#rows-plan']]) {
-      const rows = state.draft.filter((r) => r.kind === kind);
-      $(box).innerHTML = rows.length
-        ? rows.map((r) => rowHtml(r, ro)).join('')
-        : `<p class="rows-empty">${kind === '오늘' ? '아직 입력한 업무가 없습니다.' : '내일 계획이 없습니다.'}</p>`;
-    }
-    $$('#view-input [data-add], #pull-plan').forEach((b) => (b.hidden = ro));
+    $('#in-notice').hidden = !ro;
+    $('#in-notice').textContent = ro ? '지난 날짜의 보고입니다. 수정이 필요하면 팀장에게 요청하세요.' : '';
+    $('#entries').innerHTML = state.draft.length
+      ? state.draft.map((r, i) => entryHtml(r, i, ro)).join('')
+      : '<p class="rows-empty">이 날짜에 작성한 업무가 없습니다.</p>';
+    $('#add-entry').hidden = $('#pull-prev').hidden = ro;
+    autosizeAll();
     updateSavebar();
   }
+
+  // 새 행의 소속파트는 직전에 쓴 파트로 미리 채운다
+  const lastPart = () =>
+    [...state.draft].reverse().find((r) => r.part.trim())?.part || DR.storage.get(`dr-part:${state.me}`, '');
+
+  const blank = (fill = {}) => ({
+    id: DR.tmpId(),
+    date: state.inDate,
+    author: state.me,
+    part: lastPart(),
+    title: '',
+    content: '',
+    progress: '',
+    note: '',
+    ...fill,
+  });
 
   async function loadMine() {
     if (!state.me) return renderInput();
     try {
       const rows = await store.list({ from: state.inDate, to: state.inDate, author: state.me });
-      rows.sort(byKindThenTime);
+      rows.sort(byTime);
       state.server = rows;
-      state.draft = rows.map((r) => ({ ...r, issue: r.issue || '' }));
-      if (editable() && !state.draft.some((r) => r.kind === '오늘')) state.draft.push(blank('오늘'));
+      state.draft = rows.map((r) => ({ ...r }));
+      if (editable() && !state.draft.length) state.draft.push(blank());
     } catch (e) {
       state.server = [];
       state.draft = [];
@@ -145,38 +172,26 @@
     renderInput();
   }
 
-  const blank = (kind) => ({
-    id: DR.tmpId(),
-    date: state.inDate,
-    author: state.me,
-    kind,
-    content: '',
-    progress: kind === '오늘' ? 0 : null,
-    issue: '',
-  });
-
-  function addRow(kind, focus = true) {
-    const r = blank(kind);
+  function addEntry() {
+    const r = blank();
     state.draft.push(r);
     renderInput();
-    if (focus) $(`[data-id="${r.id}"] .cell-content`)?.focus();
+    $(`[data-id="${r.id}"] [data-f="title"]`)?.focus();
   }
 
-  async function pullPlan() {
+  // 직전 보고(최근 2주 이내)의 업무를 그대로 복사해 오늘 칸에 넣는다
+  async function pullPrev() {
     try {
-      const from = DR.addDays(state.inDate, -14);
-      const to = DR.addDays(state.inDate, -1);
-      const rows = (await store.list({ from, to, author: state.me })).filter((r) => r.kind === '내일');
-      if (!rows.length) return DR.toast('최근 2주 안에 적어 둔 계획이 없습니다.', 'warn');
+      const rows = await store.list({ from: DR.addDays(state.inDate, -14), to: DR.addDays(state.inDate, -1), author: state.me });
+      if (!rows.length) return DR.toast('최근 2주 안에 작성한 보고가 없습니다.', 'warn');
       const last = rows.reduce((m, r) => (r.date > m ? r.date : m), '');
-      const have = new Set(state.draft.map((r) => r.content.trim()));
-      const picked = rows.filter((r) => r.date === last && !have.has(r.content.trim()));
-      if (!picked.length) return DR.toast('불러올 새 계획이 없습니다. 이미 모두 들어가 있습니다.', 'warn');
-      // 비어 있는 첫 행은 불러온 계획으로 대체
-      state.draft = state.draft.filter((r) => !(r.id.startsWith('tmp-') && !r.content.trim() && r.kind === '오늘'));
-      picked.forEach((p) => state.draft.push({ ...blank('오늘'), content: p.content }));
+      const have = new Set(state.draft.map((r) => r.title.trim()));
+      const picked = rows.filter((r) => r.date === last && !have.has(r.title.trim())).sort(byTime);
+      if (!picked.length) return DR.toast('불러올 업무가 없습니다. 이미 모두 들어가 있습니다.', 'warn');
+      state.draft = state.draft.filter((r) => !(r.id.startsWith('tmp-') && isBlank(r)));
+      picked.forEach((p) => state.draft.push(blank(clean(p))));
       renderInput();
-      DR.toast(`${DR.shortDate(last)} 계획 ${picked.length}건을 불러왔습니다. 진행률을 입력하고 저장하세요.`);
+      DR.toast(`${DR.shortDate(last)} 보고 ${picked.length}건을 불러왔습니다. 내용과 진행율을 고친 뒤 저장하세요.`);
     } catch (e) {
       showError(e);
     }
@@ -189,20 +204,11 @@
     state.saving = true;
     updateSavebar();
     try {
-      const clean = (r) => ({
-        date: state.inDate,
-        author: state.me,
-        kind: r.kind,
-        content: r.content.trim(),
-        progress: r.kind === '오늘' ? r.progress ?? 0 : null,
-        issue: r.kind === '오늘' ? r.issue.trim() : '',
-      });
-      if (creates.length) await store.create(creates.map(clean));
-      for (const r of updates) {
-        const { date, author, ...patch } = clean(r);
-        await store.update(r.id, patch);
-      }
+      if (creates.length) await store.create(creates.map((r) => ({ date: state.inDate, author: state.me, ...clean(r) })));
+      for (const r of updates) await store.update(r.id, clean(r));
       for (const id of removes) await store.remove(id);
+      const part = lastPart();
+      if (part) DR.storage.set(`dr-part:${state.me}`, part);
       DR.toast('저장했습니다.');
       await loadMine();
     } catch (e) {
@@ -236,32 +242,27 @@
     $('#in-prev').onclick = () => goInputDate(DR.shiftWorkday(state.inDate, -1));
     $('#in-next').onclick = () => goInputDate(DR.shiftWorkday(state.inDate, 1));
     $('#in-today').onclick = () => goInputDate(DR.today());
-    $('#pull-plan').onclick = pullPlan;
+    $('#pull-prev').onclick = pullPrev;
+    $('#add-entry').onclick = addEntry;
     $('#save-btn').onclick = save;
-    $$('#view-input [data-add]').forEach((b) => (b.onclick = () => addRow(b.dataset.add)));
+    $('#part-list').innerHTML = cfg.PARTS.map((p) => `<option value="${DR.esc(p)}">`).join('');
 
-    const body = $('#in-body');
-    body.addEventListener('input', (e) => {
+    const box = $('#entries');
+    box.addEventListener('input', (e) => {
       const f = e.target.dataset.f;
-      const id = e.target.closest('[data-id]')?.dataset.id;
-      const r = state.draft.find((x) => x.id === id);
+      const r = state.draft.find((x) => x.id === e.target.closest('[data-id]')?.dataset.id);
       if (!f || !r) return;
-      r[f] = f === 'progress' ? Number(e.target.value) : e.target.value;
+      r[f] = e.target.value;
+      if (e.target.tagName === 'TEXTAREA') autosize(e.target);
       updateSavebar();
     });
-    body.addEventListener('click', (e) => {
+    box.addEventListener('click', async (e) => {
       if (!e.target.closest('[data-del]')) return;
       const id = e.target.closest('[data-id]').dataset.id;
+      const r = state.draft.find((x) => x.id === id);
+      if (!isBlank(r) && !(await DR.confirm('이 업무를 목록에서 지울까요? 저장해야 반영됩니다.', '지우기'))) return;
       state.draft = state.draft.filter((x) => x.id !== id);
       renderInput();
-    });
-    // 업무 내용에서 Enter → 아래에 새 행
-    body.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.isComposing && e.target.matches('.cell-content')) {
-        e.preventDefault();
-        const id = e.target.closest('[data-id]').dataset.id;
-        addRow(state.draft.find((x) => x.id === id).kind);
-      }
     });
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && state.tab === 'input') {
@@ -275,6 +276,7 @@
         e.returnValue = '';
       }
     });
+    window.addEventListener('resize', autosizeAll);
   }
 
   /* ───────────── 팀장: 팀 현황 ───────────── */
@@ -291,11 +293,13 @@
     return { from: days[0], to: days[4] };
   }
 
-  // 설정의 팀원 순서 + 목록에 없는 작성자(퇴사·전입 등)
+  // 설정의 팀원 순서 + 목록에 없는 작성자(전입 등)
   function members(rows) {
     const extra = [...new Set(rows.map((r) => r.author))].filter((a) => !cfg.MEMBERS.includes(a)).sort();
     return [...cfg.MEMBERS, ...extra];
   }
+
+  const partMatch = (r) => !state.ld.part || r.part.trim() === state.ld.part;
 
   async function loadLeader() {
     const ld = state.ld;
@@ -312,53 +316,56 @@
     renderLeader();
   }
 
-  function progressCell(p) {
-    if (p == null) return '';
+  function progressHtml(v) {
+    if (!String(v ?? '').trim()) return '';
+    const p = percentOf(v);
+    if (p == null) return `<span class="ptext">${DR.esc(v)}</span>`;
     const tone = p >= 100 ? 'done' : p >= 50 ? 'mid' : 'low';
-    return `<div class="pbar" data-tone="${tone}"><span style="width:${p}%"></span></div><b>${p}%</b>`;
+    return `<div class="pbar" data-tone="${tone}"><span style="width:${p}%"></span></div><b>${DR.esc(v)}</b>`;
   }
 
-  // 표 데이터(머리글 + 행)를 만든다. 화면, 복사, CSV가 같은 데이터를 쓴다
-  function dayTable() {
+  // 화면·복사·CSV가 같은 데이터를 쓴다
+  function dayGroups() {
     const ld = state.ld;
     const rows = ld.rows.filter((r) => r.date === ld.date);
-    const groups = members(rows).map((name) => {
-      let mine = rows.filter((r) => r.author === name).sort(byKindThenTime);
-      const submitted = mine.length > 0;
-      if (ld.issuesOnly) mine = mine.filter((r) => r.issue);
-      return { name, submitted, rows: mine };
-    });
-    return groups.filter((g) => (ld.issuesOnly ? g.rows.length : g.submitted || cfg.MEMBERS.includes(g.name)));
+    return members(rows)
+      .map((name) => {
+        const all = rows.filter((r) => r.author === name).sort(byTime);
+        return { name, submitted: all.length > 0, rows: all.filter(partMatch) };
+      })
+      .filter((g) => (ld.part ? g.rows.length : g.submitted || cfg.MEMBERS.includes(g.name)));
   }
 
+  const multi = (s) => DR.esc(s); // 줄바꿈은 CSS(pre-wrap)로 살린다
+
   function renderDay() {
-    const groups = dayTable();
-    const cols = ['이름', '구분', '업무 내용', '진행률', '이슈 · 지원요청', '작성시각'];
-    const letters = 'ABCDEF';
+    const cols = ['이름', '소속파트', '제목', '내용', '진행율', '비고', '작성시각'];
     let n = 0;
-    const body = groups
+    const body = dayGroups()
       .map((g) => {
         if (!g.submitted) {
           n++;
-          return `<tr class="missing"><th class="rn">${n}</th><td class="name">${DR.esc(g.name)}</td><td colspan="5"><span class="pill pill-danger">미제출</span></td></tr>`;
+          return `<tr class="missing group-end"><th class="rn">${n}</th><td class="name">${DR.esc(g.name)}</td><td colspan="6"><span class="pill pill-danger">미제출</span></td></tr>`;
         }
         return g.rows
           .map((r, i) => {
             n++;
-            const nameCell =
-              i === 0 ? `<td class="name" rowspan="${g.rows.length}">${DR.esc(g.name)}</td>` : '';
-            const kindCell = `<td class="kind"><span class="pill ${r.kind === '오늘' ? 'pill-today' : 'pill-plan'}">${r.kind === '오늘' ? '오늘 한 일' : '내일 할 일'}</span></td>`;
-            const last = i === g.rows.length - 1 ? ' class="group-end"' : '';
-            return `<tr${last}><th class="rn">${n}</th>${nameCell}${kindCell}<td class="content">${DR.esc(r.content)}</td><td class="prog">${progressCell(r.progress)}</td><td class="issue">${
-              r.issue ? `<span class="issue-mark">!</span>${DR.esc(r.issue)}` : ''
-            }</td><td class="time">${DR.fmtTime(r.updatedAt || r.createdAt)}</td></tr>`;
+            const nameCell = i === 0 ? `<td class="name" rowspan="${g.rows.length}">${DR.esc(g.name)}</td>` : '';
+            const end = i === g.rows.length - 1 ? ' class="group-end"' : '';
+            return `<tr${end}><th class="rn">${n}</th>${nameCell}
+              <td class="part">${DR.esc(r.part)}</td>
+              <td class="title">${multi(r.title)}</td>
+              <td class="content">${multi(r.content)}</td>
+              <td class="prog">${progressHtml(r.progress)}</td>
+              <td class="note">${multi(r.note)}</td>
+              <td class="time">${DR.fmtTime(r.updatedAt || r.createdAt)}</td></tr>`;
           })
           .join('');
       })
       .join('');
-    const empty = `<tr><th class="rn">1</th><td colspan="6" class="grid-empty">이슈가 등록된 업무가 없습니다.</td></tr>`;
+    const empty = `<tr><th class="rn">1</th><td colspan="7" class="grid-empty">이 파트의 보고가 없습니다.</td></tr>`;
     return `<table class="sheet sheet-day">
-      <thead><tr class="letters"><th class="corner"></th>${cols.map((_, i) => `<th>${letters[i]}</th>`).join('')}</tr>
+      <thead><tr class="letters"><th class="corner"></th>${cols.map((_, i) => `<th>${'ABCDEFG'[i]}</th>`).join('')}</tr>
       <tr><th class="corner"></th>${cols.map((c) => `<th>${c}</th>`).join('')}</tr></thead>
       <tbody>${body || empty}</tbody></table>`;
   }
@@ -366,19 +373,18 @@
   function weekTable() {
     const ld = state.ld;
     const days = weekDays(ld.date);
-    return members(ld.rows).map((name) => ({
-      name,
-      cells: days.map((date) => {
-        const mine = ld.rows.filter((r) => r.author === name && r.date === date);
-        const today = mine.filter((r) => r.kind === '오늘');
-        return {
-          date,
-          submitted: mine.length > 0,
-          items: ld.issuesOnly ? today.filter((r) => r.issue) : today,
-        };
-      }),
-    }));
+    return members(ld.rows)
+      .map((name) => ({
+        name,
+        cells: days.map((date) => {
+          const mine = ld.rows.filter((r) => r.author === name && r.date === date).sort(byTime);
+          return { date, submitted: mine.length > 0, items: mine.filter(partMatch) };
+        }),
+      }))
+      .filter((m) => !ld.part || m.cells.some((c) => c.items.length));
   }
+
+  const firstLine = (s) => String(s || '').split('\n')[0];
 
   function renderWeek() {
     const days = weekDays(state.ld.date);
@@ -387,16 +393,13 @@
       .map((m, i) => {
         const cells = m.cells
           .map((c) => {
-            if (!c.submitted) {
-              return c.date <= t
-                ? `<td class="wk missing-cell"><span class="pill pill-danger">미제출</span></td>`
-                : `<td class="wk future"></td>`;
-            }
+            if (!c.submitted)
+              return c.date <= t ? `<td class="wk missing-cell"><span class="pill pill-danger">미제출</span></td>` : `<td class="wk future"></td>`;
             const items = c.items
               .map(
                 (r) =>
-                  `<li><span class="wk-text">${DR.esc(r.content)}</span><span class="wk-p">${r.progress ?? 0}%</span>${
-                    r.issue ? `<span class="wk-issue" title="${DR.esc(r.issue)}">이슈: ${DR.esc(r.issue)}</span>` : ''
+                  `<li><span class="wk-text">${DR.esc(firstLine(r.title) || firstLine(r.content))}</span><span class="wk-p">${DR.esc(r.progress)}</span>${
+                    r.note.trim() ? `<span class="wk-note">비고: ${DR.esc(firstLine(r.note))}</span>` : ''
                   }</li>`
               )
               .join('');
@@ -422,35 +425,41 @@
       const rows = ld.rows.filter((r) => r.date === ld.date);
       const done = new Set(rows.map((r) => r.author));
       const missing = cfg.MEMBERS.filter((m) => !done.has(m));
-      const issues = rows.filter((r) => r.issue);
-      const today = rows.filter((r) => r.kind === '오늘');
-      const avg = today.length ? Math.round(today.reduce((s, r) => s + (r.progress || 0), 0) / today.length) : null;
-      const sub = cfg.MEMBERS.filter((m) => done.has(m)).length;
+      const sub = total - missing.length;
+      const parts = new Set(rows.map((r) => r.part.trim()).filter(Boolean));
+      const notes = rows.filter((r) => r.note.trim()).length;
       return `
         <div class="stat"><span class="stat-label">제출</span><span class="stat-val">${sub}<small>/${total}명</small></span>
           <span class="meter"><span style="width:${total ? (sub / total) * 100 : 0}%"></span></span></div>
         <div class="stat"><span class="stat-label">미제출</span><span class="chips">${
           missing.length ? missing.map((m) => `<span class="pill pill-danger">${DR.esc(m)}</span>`).join('') : '<span class="pill pill-ok">전원 제출</span>'
         }</span></div>
-        <div class="stat"><span class="stat-label">이슈 · 지원요청</span><span class="stat-val ${issues.length ? 'warn' : ''}">${issues.length}<small>건</small></span></div>
-        <div class="stat"><span class="stat-label">오늘 업무 / 평균 진행률</span><span class="stat-val">${today.length}<small>건</small> · ${avg ?? '-'}<small>%</small></span></div>`;
+        <div class="stat"><span class="stat-label">업무 / 파트</span><span class="stat-val">${rows.length}<small>건</small> · ${parts.size}<small>개 파트</small></span></div>
+        <div class="stat"><span class="stat-label">비고 작성</span><span class="stat-val ${notes ? 'warn' : ''}">${notes}<small>건</small></span></div>`;
     }
     const days = weekDays(ld.date).filter((d) => d <= DR.today());
     const expect = total * days.length;
     const got = cfg.MEMBERS.reduce((s, m) => s + days.filter((d) => ld.rows.some((r) => r.author === m && r.date === d)).length, 0);
-    const issues = ld.rows.filter((r) => r.issue).length;
     return `
-      <div class="stat"><span class="stat-label">주간 제출률 (지난 근무일 기준)</span><span class="stat-val">${expect ? Math.round((got / expect) * 100) : 0}<small>%</small></span>
+      <div class="stat"><span class="stat-label">주간 제출률 (오늘까지)</span><span class="stat-val">${expect ? Math.round((got / expect) * 100) : 0}<small>%</small></span>
         <span class="meter"><span style="width:${expect ? (got / expect) * 100 : 0}%"></span></span></div>
-      <div class="stat"><span class="stat-label">제출 건수</span><span class="stat-val">${got}<small>/${expect}</small></span></div>
-      <div class="stat"><span class="stat-label">이슈 · 지원요청</span><span class="stat-val ${issues ? 'warn' : ''}">${issues}<small>건</small></span></div>`;
+      <div class="stat"><span class="stat-label">제출 건수 (사람 × 일)</span><span class="stat-val">${got}<small>/${expect}</small></span></div>
+      <div class="stat"><span class="stat-label">이번 주 업무</span><span class="stat-val">${ld.rows.length}<small>건</small></span></div>`;
+  }
+
+  function renderPartFilter() {
+    const parts = [...new Set([...cfg.PARTS, ...state.ld.rows.map((r) => r.part.trim()).filter(Boolean)])];
+    if (state.ld.part && !parts.includes(state.ld.part)) parts.push(state.ld.part);
+    $('#part-filter').innerHTML =
+      `<option value="">전체</option>` +
+      parts.map((p) => `<option ${p === state.ld.part ? 'selected' : ''}>${DR.esc(p)}</option>`).join('');
   }
 
   function renderLeader() {
     const ld = state.ld;
     $$('.seg [data-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === ld.mode)));
     $('#ld-date').value = ld.date;
-    $('#issues-only').checked = ld.issuesOnly;
+    renderPartFilter();
     $('#summary').innerHTML = renderSummary();
     $('#grid').innerHTML = ld.mode === 'day' ? renderDay() : renderWeek();
     $('#grid').setAttribute('aria-busy', String(ld.loading));
@@ -463,11 +472,11 @@
   // 복사·CSV용 2차원 배열
   function exportRows() {
     if (state.ld.mode === 'day') {
-      const out = [['날짜', '이름', '구분', '업무 내용', '진행률', '이슈·지원요청', '작성시각']];
-      for (const g of dayTable()) {
-        if (!g.submitted) out.push([state.ld.date, g.name, '미제출', '', '', '', '']);
+      const out = [['날짜', '이름', '소속파트', '제목', '내용', '진행율', '비고', '작성시각']];
+      for (const g of dayGroups()) {
+        if (!g.submitted) out.push([state.ld.date, g.name, '', '미제출', '', '', '', '']);
         for (const r of g.rows)
-          out.push([r.date, g.name, r.kind === '오늘' ? '오늘 한 일' : '내일 할 일', r.content, r.progress == null ? '' : `${r.progress}%`, r.issue, DR.fmtTime(r.updatedAt || r.createdAt)]);
+          out.push([r.date, g.name, r.part, r.title, r.content, r.progress, r.note, DR.fmtTime(r.updatedAt || r.createdAt)]);
       }
       return out;
     }
@@ -476,7 +485,11 @@
     for (const m of weekTable())
       out.push([
         m.name,
-        ...m.cells.map((c) => (!c.submitted ? (c.date <= DR.today() ? '미제출' : '') : c.items.map((r) => `${r.content} (${r.progress ?? 0}%)${r.issue ? ` [이슈: ${r.issue}]` : ''}`).join('\n'))),
+        ...m.cells.map((c) =>
+          !c.submitted
+            ? c.date <= DR.today() ? '미제출' : ''
+            : c.items.map((r) => `${firstLine(r.title)}${r.progress ? ` (${r.progress})` : ''}`).join('\n')
+        ),
       ]);
     return out;
   }
@@ -525,8 +538,8 @@
     $('#ld-next').onclick = () => goLeader(step(1));
     $('#ld-today').onclick = () => goLeader(DR.today());
     $('#ld-date').addEventListener('change', (e) => e.target.value && goLeader(e.target.value));
-    $('#issues-only').addEventListener('change', (e) => {
-      state.ld.issuesOnly = e.target.checked;
+    $('#part-filter').addEventListener('change', (e) => {
+      state.ld.part = e.target.value;
       renderLeader();
     });
     $('#ld-refresh').onclick = loadLeader;

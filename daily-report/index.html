@@ -51,23 +51,16 @@
 
       <section class="block">
         <header class="block-head">
-          <h2>오늘 한 일</h2>
-          <button type="button" class="btn ghost" id="pull-plan">어제 계획 불러오기</button>
+          <h2>업무 목록</h2>
+          <button type="button" class="btn ghost" id="pull-prev">지난 보고 불러오기</button>
         </header>
-        <div class="row-head row-today" aria-hidden="true">
-          <span>업무 내용</span><span>진행률</span><span>이슈 · 지원요청</span><span></span>
+        <div class="entry entry-head" aria-hidden="true">
+          <span>#</span><span>소속파트</span><span>제목</span><span>내용</span><span>진행율</span><span>비고</span><span></span>
         </div>
-        <div id="rows-today" class="rows"></div>
-        <button type="button" class="btn add" data-add="오늘">+ 업무 추가</button>
+        <div id="entries" class="entries"></div>
+        <button type="button" class="btn add" id="add-entry">+ 업무 추가</button>
       </section>
-
-      <section class="block">
-        <header class="block-head">
-          <h2>내일 할 일</h2>
-        </header>
-        <div id="rows-plan" class="rows"></div>
-        <button type="button" class="btn add" data-add="내일">+ 계획 추가</button>
-      </section>
+      <datalist id="part-list"></datalist>
 
       <div class="savebar">
         <span id="dirty-text" class="dirty-text"></span>
@@ -89,7 +82,10 @@
         <button type="button" class="icon-btn" id="ld-next" aria-label="다음">›</button>
         <button type="button" class="btn ghost" id="ld-today">오늘</button>
       </div>
-      <label class="check"><input type="checkbox" id="issues-only"> 이슈만 보기</label>
+      <label class="field">
+        <span>소속파트</span>
+        <select id="part-filter"></select>
+      </label>
       <span class="spacer"></span>
       <button type="button" class="btn" id="copy-tsv">엑셀로 복사</button>
       <button type="button" class="btn" id="dl-csv">CSV 저장</button>
