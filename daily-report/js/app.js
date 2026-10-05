@@ -56,7 +56,7 @@
   const involves = (r, name = state.me) => r.author === name || ownersOf(r).includes(name);
   const tagId = (id) => (id ? `#${id}` : '');
   // 좁은 칸에서 보기 좋게 날짜 뒤에서 줄바꿈될 수 있게
-  const tagIdHtml = (id) => (id ? DR.esc(tagId(id)).replace(/^(#[^-]+-\d{6}-)/, '$1<wbr>') : '새 과제');
+  const tagIdHtml = (id) => (id ? DR.esc(tagId(id)) : '새 과제');
 
   /* ───────────── 공통 ───────────── */
 
@@ -244,7 +244,7 @@
       const rows = (await store.list({ from: state.inDate, to: state.inDate })).filter((r) => involves(r));
       rows.sort(byTime);
       // 예전 데이터에 과제번호가 없으면 붙여 둔다 (다음 저장 때 함께 기록됨)
-      rows.forEach((r) => r.taskId || (r.taskId = DR.makeTaskId(r.part, new Date(r.createdAt))));
+      rows.forEach((r) => r.taskId || (r.taskId = DR.nextTaskId(r.part, rows.map((x) => x.taskId), new Date(r.createdAt))));
       state.server = rows;
       state.draft = rows.map((r) => ({ ...r }));
       if (editable() && !rows.some((r) => r.author === state.me)) await carryOver();
@@ -302,6 +302,22 @@
     });
   }
 
+  // 같은 파트의 두 사람이 정확히 같은 순간에 저장하면 순번이 겹칠 수 있다.
+  // 저장 직후 다시 확인해, 겹친 번호가 있으면 내 쪽 과제에 다음 순번을 새로 붙인다
+  async function fixSameMomentIds(newIds) {
+    const rows = await store.list({ from: state.inDate, to: state.inDate });
+    const used = rows.map((r) => r.taskId);
+    for (const id of newIds) {
+      const same = rows.filter((r) => r.taskId === id);
+      if (same.length < 2) continue;
+      for (const r of same.filter((x) => x.author === state.me)) {
+        const next = DR.nextTaskId(r.part, used);
+        used.push(next);
+        await store.update(r.id, { taskId: next });
+      }
+    }
+  }
+
   async function save() {
     if (!editable() || state.saving) return;
     const { creates, updates, removes, count } = diff();
@@ -354,10 +370,17 @@
       }
 
       const stamp = { editor: state.me };
-      // 등록 시점의 파트·일시로 과제번호 부여
-      toCreate.forEach((d) => d.taskId || (d.taskId = DR.makeTaskId(d.part)));
-      if (toCreate.length)
+      // 등록 시점의 파트·날짜로 과제번호 부여. 순번은 오늘 이미 쓰인 번호 다음부터
+      const used = fresh.map((r) => r.taskId);
+      toCreate.forEach((d) => {
+        if (d.taskId) return;
+        d.taskId = DR.nextTaskId(d.part, used);
+        used.push(d.taskId);
+      });
+      if (toCreate.length) {
         await store.create(toCreate.map((r) => ({ date: state.inDate, author: state.me, ...clean(r), ...stamp })));
+        await fixSameMomentIds(toCreate.map((r) => r.taskId));
+      }
       for (const [id, r] of toUpdate) await store.update(id, { ...clean(r), ...stamp });
       for (const id of toRemove) await store.remove(id);
       DR.toast(skippedRemoves ? `저장했습니다. 동료가 그사이 수정한 과제 ${skippedRemoves}건은 지우지 않았습니다.` : '저장했습니다.');

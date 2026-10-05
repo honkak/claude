@@ -4,7 +4,7 @@
  * goodocs 어댑터와 똑같은 함수(list/create/update/remove)를 제공한다.
  */
 (function (DR) {
-  const KEY = 'dr-mock-rows-v6';
+  const KEY = 'dr-mock-rows-v7';
   let rows = null;
 
   // 예시 업무: [분야(참고용), 제목, 내용]
@@ -48,12 +48,14 @@
     const active = Object.fromEntries(cfg.MEMBERS.map((m) => [m, []]));
     // 예시용: 구성원을 파트에 고르게 배정
     const partOf = Object.fromEntries(cfg.MEMBERS.map((m, i) => [m, cfg.PARTS[i % cfg.PARTS.length]]));
+    const usedIds = [];
     const newTask = (author, date) => {
       const [, title, content] = pick(rand, TASKS);
       const mates = cfg.MEMBERS.filter((m) => m !== author && partOf[m] === partOf[author]);
       const owners = rand() < 0.3 && mates.length ? [author, pick(rand, mates)] : [author];
-      const at = new Date(DR.parseDate(date).setHours(8 + Math.floor(rand() * 9), Math.floor(rand() * 60)));
-      return { taskId: DR.makeTaskId(partOf[author], at), part: partOf[author], title, content, owners: owners.join(', '), p: 10 * (1 + Math.floor(rand() * 3)), note: pick(rand, NOTES) };
+      const taskId = DR.nextTaskId(partOf[author], usedIds, DR.parseDate(date));
+      usedIds.push(taskId);
+      return { taskId, part: partOf[author], title, content, owners: owners.join(', '), p: 10 * (1 + Math.floor(rand() * 3)), note: pick(rand, NOTES) };
     };
     days.forEach((date) => {
       cfg.MEMBERS.forEach((author) => {

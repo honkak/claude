@@ -53,20 +53,23 @@ window.DR = window.DR || {};
 
   DR.tmpId = () => 'tmp-' + Math.random().toString(36).slice(2, 10);
 
-  // 과제번호: 파트코드-등록일-등록시각-구분자  예) P1-261005-1432-K7
-  // 같은 파트에서 같은 분에 여러 건이 등록돼도 겹치지 않도록 끝에 2자리(헷갈리는 0/O, 1/I/L 제외)를 붙인다
-  const ID_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
-  DR.makeTaskId = (part, when = new Date()) => {
+  // 과제번호: 파트코드-등록일-순번  예) P1-261005-01 (1파트, 2026-10-05에 그 파트에서 첫 번째로 등록)
+  DR.taskIdPrefix = (part, when = new Date()) => {
     const codes = (window.APP_CONFIG && window.APP_CONFIG.PART_CODES) || {};
     const code = codes[String(part ?? '').trim()] || 'ETC';
     const d = when instanceof Date && !isNaN(when) ? when : new Date();
-    const ymd = `${String(d.getFullYear()).slice(2)}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
-    const hm = `${pad(d.getHours())}${pad(d.getMinutes())}`;
-    const buf = new Uint32Array(2);
-    if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(buf);
-    else buf.forEach((_, i) => (buf[i] = Math.floor(Math.random() * 1e9)));
-    const tail = [...buf].map((n) => ID_CHARS[n % ID_CHARS.length]).join('');
-    return `${code}-${ymd}-${hm}-${tail}`;
+    return `${code}-${String(d.getFullYear()).slice(2)}${pad(d.getMonth() + 1)}${pad(d.getDate())}-`;
+  };
+  // 이미 쓰인 번호들(used)을 보고 같은 파트·날짜의 다음 순번을 만든다
+  DR.nextTaskId = (part, used, when = new Date()) => {
+    const prefix = DR.taskIdPrefix(part, when);
+    let max = 0;
+    for (const id of used) {
+      if (!id || !id.startsWith(prefix)) continue;
+      const n = parseInt(id.slice(prefix.length), 10);
+      if (n > max) max = n;
+    }
+    return prefix + pad(max + 1);
   };
 
   // 브라우저 저장소가 막혀 있어도(사생활 보호 모드 등) 앱은 동작해야 한다

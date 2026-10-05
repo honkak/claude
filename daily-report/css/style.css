@@ -256,7 +256,7 @@ input:disabled, select:disabled { background: var(--surface-2); color: var(--fg)
 .entries { display: grid; }
 .entry {
   display: grid;
-  grid-template-columns: 80px 100px minmax(0, 1fr) minmax(0, 1.5fr) 90px minmax(0, 0.7fr) 150px 34px;
+  grid-template-columns: 72px 100px minmax(0, 1fr) minmax(0, 1.5fr) 90px minmax(0, 0.7fr) 150px 34px;
   gap: 6px;
   align-items: start;
   padding-block: 8px;
@@ -589,7 +589,7 @@ select.unset { color: var(--muted); }
 @media (max-width: 640px) {
   .me-chip { margin-left: 0; }
   .entry-head { display: none; }
-  .entry { grid-template-columns: 76px minmax(0, 1fr) 96px 34px; }
+  .entry { grid-template-columns: 72px minmax(0, 1fr) 96px 34px; }
   .entry-no { grid-column: 1; grid-row: 1; }
   .entry .c-part { grid-column: 2; grid-row: 1; }
   .entry .c-progress { grid-column: 3; grid-row: 1; }
