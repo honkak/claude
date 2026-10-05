@@ -256,7 +256,7 @@ input:disabled, select:disabled { background: var(--surface-2); color: var(--fg)
 .entries { display: grid; }
 .entry {
   display: grid;
-  grid-template-columns: 72px 100px minmax(0, 1fr) minmax(0, 1.5fr) 90px minmax(0, 0.7fr) 150px 34px;
+  grid-template-columns: 88px 100px minmax(0, 1fr) minmax(0, 1.5fr) 90px minmax(0, 0.7fr) 150px 34px;
   gap: 6px;
   align-items: start;
   padding-block: 8px;

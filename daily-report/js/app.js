@@ -75,12 +75,18 @@
     DR.toast(err.message || String(err), 'error');
   }
 
-  // 글자 수만큼 칸이 늘어나는 입력칸
-  function autosize(el) {
-    el.style.height = 'auto';
-    el.style.height = el.scrollHeight + 2 + 'px';
+  // 글자 수만큼 칸이 늘어나되, 한 줄의 제목·내용·비고 칸은 가장 긴 칸에 맞춰 같은 높이로 둔다
+  function autosizeRow(entry) {
+    if (!entry) return;
+    const areas = [...entry.querySelectorAll('textarea')];
+    areas.forEach((el) => (el.style.height = 'auto'));
+    // 휴대폰처럼 칸이 위아래로 쌓이는 좁은 화면에서는 각자 내용만큼만
+    if (window.matchMedia('(max-width: 640px)').matches) return areas.forEach((el) => (el.style.height = el.scrollHeight + 2 + 'px'));
+    const h = Math.max(...areas.map((el) => el.scrollHeight + 2));
+    areas.forEach((el) => (el.style.height = h + 'px'));
   }
-  const autosizeAll = () => $$('#entries textarea').forEach(autosize);
+  const autosize = (el) => autosizeRow(el.closest('.entry'));
+  const autosizeAll = () => $$('#entries .entry').forEach(autosizeRow);
 
   /* ───────────── 구성원: 내 업무 입력 ───────────── */
 
