@@ -879,6 +879,7 @@
     $$('.seg [data-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === ld.mode)));
     $('#ld-date').value = ld.date;
     renderPartFilter();
+    updateXlsxLabel();
     $('#summary').innerHTML = renderSummary();
     $('#grid').innerHTML = ld.mode === 'day' ? renderDay() : renderWeek();
     $('#grid').setAttribute('aria-busy', String(ld.loading));
@@ -919,21 +920,67 @@
       await navigator.clipboard.writeText(tsv);
       DR.toast('복사했습니다. 엑셀에 붙여넣기(Ctrl+V) 하세요.');
     } catch {
-      DR.toast('이 환경에서는 클립보드 복사가 막혀 있습니다. CSV 저장을 이용하세요.', 'error');
+      DR.toast('이 환경에서는 클립보드 복사가 막혀 있습니다. 엑셀 내려받기를 이용하세요.', 'error');
     }
   }
 
-  function downloadCsv() {
-    const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = '﻿' + exportRows().map((r) => r.map(cell).join(',')).join('\r\n'); // BOM: 엑셀 한글 깨짐 방지
-    const { from, to } = range();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = `일일업무보고_${from === to ? from : `${from}_${to}`}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  // 팀 전체(파트 필터와 무관) 보고를 엑셀 파일로. 일간이면 그날, 주간이면 그 주 전체
+  async function downloadXlsx() {
+    const btn = $('#dl-xlsx');
+    btn.disabled = true;
+    try {
+      const { from, to } = range();
+      const rows = await store.list({ from, to }); // 화면 필터와 상관없이 최신 데이터로
+      const order = partList(rows);
+      rows.sort(
+        (a, b) => a.date.localeCompare(b.date) || order.indexOf(partOf(a)) - order.indexOf(partOf(b)) || byOwner(a, b)
+      );
+      const columns = [
+        { header: '날짜', width: 11 },
+        { header: '소속파트', width: 10 },
+        { header: '과제번호', width: 15 },
+        { header: '제목', width: 32 },
+        { header: '내용', width: 60 },
+        { header: '진행율', width: 9 },
+        { header: '비고', width: 24 },
+        { header: '담당자', width: 16 },
+        { header: '작성자', width: 9 },
+        { header: '최종 수정', width: 16 },
+        { header: '수정자', width: 9 },
+      ];
+      const stamp = (r) => {
+        const d = new Date(r.updatedAt || r.createdAt);
+        return isNaN(d) ? '' : `${DR.fmtDate(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      };
+      const data = rows.map((r) => [
+        r.date,
+        partOf(r),
+        r.taskId,
+        r.title,
+        r.content,
+        r.progress,
+        r.note,
+        ownersOf(r).join(', '),
+        r.author,
+        stamp(r),
+        r.editor || r.author,
+      ]);
+      const span = from === to ? from : `${from}~${to}`;
+      const bytes = DR.buildXlsx({ sheetName: span, columns, rows: data });
+      const filename = `${cfg.TEAM_NAME}_일일업무보고_${from === to ? from : `${from}_${to}`}.xlsx`;
+      const result = await DR.saveFile(filename, bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      if (result === 'saved') DR.toast(`${span} 팀 전체 ${rows.length}건을 엑셀로 내려받았습니다.`);
+    } catch (e) {
+      showError(e);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function updateXlsxLabel() {
+    const ld = state.ld;
+    $('#dl-xlsx').textContent =
+      ld.mode === 'week' ? '이번 주 엑셀 내려받기' : ld.date === DR.today() ? '오늘 엑셀 내려받기' : `${DR.shortDate(ld.date)} 엑셀 내려받기`;
   }
 
   function goLeader(date, mode) {
@@ -959,7 +1006,7 @@
     });
     $('#ld-refresh').onclick = loadLeader;
     $('#copy-tsv').onclick = copyTsv;
-    $('#dl-csv').onclick = downloadCsv;
+    $('#dl-xlsx').onclick = downloadXlsx;
     $('#grid').addEventListener('click', (e) => {
       const go = e.target.closest('[data-go]');
       if (go) goLeader(go.dataset.go, 'day');
