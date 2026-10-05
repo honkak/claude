@@ -20,6 +20,7 @@
       <button type="button" role="tab" id="tab-input" data-tab="input">내 업무 입력</button>
       <button type="button" role="tab" id="tab-leader" data-tab="leader">팀 현황</button>
     </nav>
+    <button type="button" id="me-chip" class="me-chip"></button>
     <span id="store-badge" class="store-badge"></span>
   </header>
 
@@ -42,15 +43,11 @@
       </div>
     </div>
 
-    <form id="me-setup" class="empty-state">
-      <strong>처음 한 번만 이름과 소속파트를 입력하세요.</strong>
-      <span>이 PC의 크롬에 저장되어, 다음부터는 바로 업무를 입력할 수 있습니다. 새 업무의 소속파트와 담당자도 이 값으로 미리 채워집니다.</span>
-      <div class="setup-row">
-        <input type="text" id="me-input" list="member-list" placeholder="이름" autocomplete="off" aria-label="이름">
-        <select id="setup-part" aria-label="소속파트"></select>
-        <button type="submit" class="btn primary">시작</button>
-      </div>
-    </form>
+    <div id="me-empty" class="empty-state" hidden>
+      <strong>먼저 이름을 입력하세요.</strong>
+      <span>한 번만 입력하면 이 PC의 크롬에 저장됩니다.</span>
+      <div><button type="button" class="btn primary" id="me-open">이름 입력하기</button></div>
+    </div>
 
     <div id="in-body">
       <p id="in-heading" class="report-heading"></p>
@@ -110,6 +107,23 @@
 <datalist id="member-list"></datalist>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<div id="me-dialog" class="dialog-backdrop" hidden>
+  <form class="dialog me-form" id="me-setup" aria-labelledby="me-title">
+    <h2 id="me-title">이름과 소속파트</h2>
+    <p class="meta">이 PC의 크롬에 저장되어, 다음부터는 묻지 않고 바로 업무를 입력합니다. 새 업무의 소속파트와 담당자도 이 값으로 미리 채워집니다.</p>
+    <label class="field-col"><span>이름</span>
+      <input type="text" id="me-input" list="member-list" placeholder="예: 김민준" autocomplete="off">
+    </label>
+    <label class="field-col"><span>소속파트</span>
+      <select id="setup-part"></select>
+    </label>
+    <div class="dialog-actions">
+      <button type="button" class="btn" id="me-cancel">취소</button>
+      <button type="submit" class="btn primary">저장</button>
+    </div>
+  </form>
+</div>
 
 <div id="loader" class="dialog-backdrop" hidden>
   <div class="dialog loader" role="dialog" aria-modal="true" aria-labelledby="loader-title">

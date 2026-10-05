@@ -126,8 +126,26 @@ button, input, select { font: inherit; color: inherit; }
 }
 .tabs button[aria-selected="true"] { background: var(--surface); color: var(--fg); box-shadow: var(--shadow); }
 
-.store-badge {
+.me-chip {
   margin-left: auto;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.me-chip:hover { border-color: var(--accent); }
+.me-chip .me-label { color: var(--muted); font-size: 12px; }
+.me-chip.needs { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.me-form { display: grid; gap: 12px; }
+.me-form h2 { margin: 0; font-size: 16px; }
+.me-form .meta { margin: 0; }
+.field-col { display: grid; gap: 4px; font-weight: 600; }
+.field-col span { color: var(--muted); font-size: 13px; }
+.field-col input, .field-col select { width: 100%; }
+.store-badge {
   font-size: 12px;
   padding: 3px 10px;
   border-radius: 999px;
@@ -547,7 +565,7 @@ select.unset { color: var(--muted); }
 
 /* ── 좁은 화면(휴대폰) ── */
 @media (max-width: 640px) {
-  .store-badge { margin-left: 0; }
+  .me-chip { margin-left: 0; }
   .entry-head { display: none; }
   .entry { grid-template-columns: 28px minmax(0, 1fr) 96px 34px; }
   .entry-no { grid-column: 1; grid-row: 1; }

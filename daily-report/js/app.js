@@ -10,7 +10,7 @@
 
   const state = {
     tab: DR.storage.get('dr-tab', 'input'),
-    me: DR.storage.get('dr-me', ''),
+    me: DR.storage.get('dr-me-v2', ''),
     myPart: '',
     inDate: DR.today(),
     server: [], // 서버에 저장된 내 행
@@ -167,13 +167,13 @@
 
   function renderInput() {
     const hasMe = !!state.me;
-    $('#me-setup').hidden = hasMe;
+    $('#me-empty').hidden = hasMe;
     $('#whoami').hidden = !hasMe;
+    renderMeChip();
     $('#in-body').hidden = !hasMe;
     $('#me-name').textContent = state.me;
     $('#my-part').innerHTML = partOptions(state.myPart);
     $('#my-part').classList.toggle('unset', !state.myPart);
-    if (!$('#setup-part').options.length) $('#setup-part').innerHTML = partOptions('');
     $('#in-date').value = state.inDate;
     if (!hasMe) return;
 
@@ -283,10 +283,32 @@
   // 이름과 내 소속파트는 브라우저(크롬)에 저장해 다음에도 그대로 쓴다
   function setMe(name, part) {
     state.me = name;
-    DR.storage.set('dr-me', name);
+    DR.storage.set('dr-me-v2', name);
     if (part !== undefined) setMyPart(part);
     else state.myPart = DR.storage.get(`dr-part:${name}`, '');
   }
+  function renderMeChip() {
+    const chip = $('#me-chip');
+    chip.innerHTML = state.me
+      ? `<span class="me-label">작성자</span> <b>${DR.esc(state.me)}</b>${state.myPart ? ` · ${DR.esc(state.myPart)}` : ''}`
+      : '<b>이름 입력</b>';
+    chip.classList.toggle('needs', !state.me);
+    chip.title = '이름·소속파트 변경';
+  }
+
+  function openMeDialog() {
+    $('#me-input').value = state.me;
+    $('#setup-part').innerHTML = partOptions(state.myPart);
+    $('#me-cancel').hidden = !state.me; // 처음에는 이름을 넣어야 넘어간다
+    $('#me-dialog').hidden = false;
+    $('#me-input').focus();
+    $('#me-input').select();
+  }
+  function closeMeDialog() {
+    if (!state.me) return $('#me-input').focus();
+    $('#me-dialog').hidden = true;
+  }
+
   function setMyPart(part) {
     state.myPart = part;
     if (state.me) DR.storage.set(`dr-part:${state.me}`, part);
@@ -414,36 +436,33 @@
 
   function bindInput() {
     rememberNames([]);
-    $('#me-setup').addEventListener('submit', (e) => {
+    $('#me-setup').addEventListener('submit', async (e) => {
       e.preventDefault();
       const name = $('#me-input').value.trim();
       if (!name) return $('#me-input').focus();
-      setMe(name, $('#setup-part').value || DR.storage.get(`dr-part:${name}`, ''));
+      if (name !== state.me && !(await guard())) return;
+      const changed = name !== state.me;
+      setMe(name, $('#setup-part').value);
       rememberNames([name]);
-      loadMine();
+      closeMeDialog();
+      DR.toast(`${name}(${state.myPart || '파트 미지정'})으로 저장했습니다.`);
+      if (changed) loadMine();
+      else renderInput();
     });
     // 예전에 이 PC에서 쓴 이름이면 그때의 파트를 미리 골라 준다
     $('#me-input').addEventListener('input', (e) => {
       const saved = DR.storage.get(`dr-part:${e.target.value.trim()}`, '');
       if (saved) $('#setup-part').value = saved;
     });
+    $('#me-cancel').onclick = closeMeDialog;
+    $('#me-dialog').addEventListener('keydown', (e) => e.key === 'Escape' && closeMeDialog());
+    $('#me-chip').onclick = $('#me-open').onclick = $('#me-change').onclick = openMeDialog;
     $('#my-part').addEventListener('change', (e) => {
       setMyPart(e.target.value);
       renderInput();
+      renderMeChip();
       DR.toast(e.target.value ? `내 소속파트를 ${e.target.value}(으)로 저장했습니다.` : '내 소속파트를 비웠습니다.');
     });
-    $('#me-change').onclick = async () => {
-      if (!(await guard())) return;
-      const prev = state.me;
-      setMe('', '');
-      state.myPart = '';
-      state.server = [];
-      state.draft = [];
-      renderInput();
-      $('#me-input').value = prev;
-      $('#setup-part').value = DR.storage.get(`dr-part:${prev}`, '');
-      $('#me-input').select();
-    };
     $('#in-date').addEventListener('change', (e) => goInputDate(e.target.value));
     $('#in-prev').onclick = () => goInputDate(DR.shiftWorkday(state.inDate, -1));
     $('#in-next').onclick = () => goInputDate(DR.shiftWorkday(state.inDate, 1));
@@ -822,6 +841,8 @@
     bindLeader();
     setTab(state.tab === 'leader' ? 'leader' : 'input');
     loadMine();
+    renderMeChip();
+    if (!state.me) openMeDialog(); // 처음 접속: 어느 탭이든 이름부터 묻는다
   }
 
   init();
