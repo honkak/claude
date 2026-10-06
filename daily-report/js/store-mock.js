@@ -4,7 +4,7 @@
  * goodocs 어댑터와 똑같은 함수(list/create/update/remove)를 제공한다.
  */
 (function (DR) {
-  const KEY = 'dr-mock-rows-v9';
+  const KEY = 'dr-mock-rows-v10';
   let rows = null;
 
   // 예시 업무: [분야(참고용), 제목, 내용]
@@ -86,6 +86,18 @@
         active[author] = list.filter((t) => t.p < 100);
       });
     });
+    // '내 현황'의 주의(곧 정체) 예시: 다섯 번째 팀원의 진행 중 과제 하나를 약 24일째 그대로 둔다
+    const warnWho = cfg.MEMBERS[4];
+    const lastDay = days[days.length - 1];
+    const cand = out.find((r) => r.author === warnWho && r.date === lastDay && r.progress !== '완료');
+    if (cand) {
+      const cutoff = DR.addDays(today, -24);
+      const same = out.filter((r) => r.taskId === cand.taskId && r.date >= cutoff).sort((a, b) => a.date.localeCompare(b.date));
+      if (same.length) {
+        const base = same[0].progress === '완료' ? '40%' : same[0].progress;
+        same.forEach((r) => (r.progress = base));
+      }
+    }
     // 오늘은 앞의 4명만 이미 제출한 상태로 시작 (이월 업무를 그대로 제출했다고 가정)
     const last = days[days.length - 1];
     const now = new Date().toISOString();

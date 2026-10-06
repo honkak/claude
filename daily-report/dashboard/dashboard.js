@@ -15,7 +15,7 @@
 (function (DR) {
   const M = DR.model;
   const cfg = () => window.APP_CONFIG;
-  const opts = () => ({ TAB_IN_MAIN_APP: true, STALL_DAYS: 30, DEFAULT_WEEKS: 8, ...(cfg().DASHBOARD || {}) });
+  const opts = () => ({ TAB_IN_MAIN_APP: true, DEFAULT_WEEKS: 8, ...(cfg().DASHBOARD || {}) });
   const $ = (sel, root) => root.querySelector(sel);
 
   const STATUS = {
@@ -24,58 +24,9 @@
     done: { label: '완료', mark: '✓' },
   };
 
-  /* ───────── 날짜 ───────── */
-
-  // a에서 b까지 지난 날수 (달력 기준)
-  const daysBetween = (a, b) => Math.round((DR.parseDate(b) - DR.parseDate(a)) / 86400000);
-  // 과제번호(P1-261005-01)에 담긴 등록일
-  function registeredOf(id, fallback) {
-    const m = String(id || '').match(/-(\d{2})(\d{2})(\d{2})-/);
-    return m ? `20${m[1]}-${m[2]}-${m[3]}` : fallback;
-  }
-
-  /* ───────── 보고 → 과제 ───────── */
-
-  // 날마다 쌓인 보고 줄을 과제번호 단위로 묶어, 과제마다 현재 상태를 계산한다
-  function buildTasks(rows, today) {
-    const groups = new Map();
-    for (const r of rows) {
-      const key = r.taskId || `${r.author}|${String(r.title).trim()}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(r);
-    }
-    const tasks = [];
-    for (const [key, list] of groups) {
-      list.sort((a, b) => a.date.localeCompare(b.date) || M.byTime(a, b));
-      const last = list[list.length - 1];
-      const done = M.isDone(last.progress);
-      // 진행율이 마지막으로 바뀐 날 (뒤에서부터 같은 진행율이 이어진 첫날)
-      let changeDate = last.date;
-      for (let i = list.length - 2; i >= 0; i--) {
-        if (String(list[i].progress).trim() !== String(last.progress).trim()) break;
-        changeDate = list[i].date;
-      }
-      const doneRow = done ? list.find((r) => M.isDone(r.progress)) : null;
-      const idle = daysBetween(changeDate, today);
-      tasks.push({
-        id: last.taskId || '',
-        key,
-        part: M.partOf(last),
-        title: String(last.title || last.content || '').trim(),
-        owners: M.ownersOf(last),
-        progress: String(last.progress || '').trim(),
-        pct: M.percentOf(last.progress),
-        registered: registeredOf(last.taskId, list[0].date),
-        lastSeen: last.date,
-        changeDate,
-        idle,
-        doneDate: doneRow ? doneRow.date : null,
-        status: done ? 'done' : idle >= opts().STALL_DAYS ? 'stalled' : 'active',
-        history: list,
-      });
-    }
-    return tasks;
-  }
+  // 과제 상태 판단은 공통 규칙(js/model.js)을 쓴다
+  const buildTasks = (rows, today) => M.buildTasks(rows, today);
+  const stallDays = () => M.rules().STALL_DAYS;
 
   /* ───────── 그리기 도구 ───────── */
 
@@ -220,7 +171,7 @@
       try {
         const today = DR.today();
         // 기간 앞쪽에 시작한 과제의 이력과, 정체 기준(30일)을 판단할 만큼 넉넉히 더 읽는다
-        const back = Math.max(7 * (st.weeks + 3), opts().STALL_DAYS + 21);
+        const back = Math.max(7 * (st.weeks + 3), stallDays() + 21);
         const from = DR.addDays(DR.weekStart(today), -back);
         const rows = await store.list({ from, to: today });
         st.tasks = buildTasks(rows, today);
@@ -275,7 +226,7 @@
           <span class="kpi-sub">평균 진행율 ${avg ?? '-'}%</span></div>
         <div class="kpi ${stalled.length ? 'is-warn' : ''}"><span class="kpi-label">${stalled.length ? '<i class="warn-icon" aria-hidden="true">!</i>' : ''}정체 과제</span>
           <span class="kpi-val">${stalled.length}<small>건</small></span>
-          <span class="kpi-sub">${opts().STALL_DAYS}일 이상 진행율 변화 없음</span></div>
+          <span class="kpi-sub">${stallDays()}일 이상 진행율 변화 없음</span></div>
         <div class="kpi"><span class="kpi-label">이번 주 신규 등록</span><span class="kpi-val">${newThis}<small>건</small></span>
           <span class="kpi-sub">지난주 ${newPrev}건</span></div>
         <div class="kpi"><span class="kpi-label">이번 주 완료</span><span class="kpi-val">${doneThis}<small>건</small></span>

@@ -226,6 +226,71 @@ input:disabled, select:disabled { background: var(--surface-2); color: var(--fg)
 .pill-danger { background: var(--danger-soft); color: var(--danger); }
 .pill-ok { background: var(--ok-soft); color: var(--accent); }
 .pill-part { background: var(--surface-2); color: var(--fg); }
+.pill-warn { background: var(--warn-soft); color: var(--warn); }
+.stat-val.danger { color: var(--danger); }
+
+/* 내 현황 */
+.tab-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  vertical-align: 1px;
+}
+.ms { display: grid; gap: 14px; }
+.ms-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ms-head h2 { margin: 0; font-size: 18px; }
+.ms-head .meta { margin: 2px 0 0; }
+.ms .banner, .ms .summary { margin: 0; }
+.ms-list { display: grid; gap: 8px; }
+.ms-item {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 8px;
+}
+.ms-item.lv-critical { border-left-color: var(--danger); background: var(--danger-soft); }
+.ms-item.lv-warn { border-left-color: var(--warn); background: var(--warn-soft); }
+.ms-item.lv-info { border-left-color: var(--line-strong); }
+.ms-flag { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13px; }
+.ms-flag i {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--surface);
+}
+.lv-critical .ms-flag { color: var(--danger); }
+.lv-critical .ms-flag i { background: var(--danger); }
+.lv-warn .ms-flag { color: var(--warn); }
+.lv-warn .ms-flag i { background: var(--warn); }
+.lv-info .ms-flag { color: var(--muted); }
+.lv-info .ms-flag i { background: var(--muted); }
+.ms-title { font-weight: 700; }
+.ms-title .tid-cell { font-family: var(--font-num); font-size: 11px; color: var(--muted); font-weight: 500; margin-right: 4px; }
+.ms-body .meta { margin: 2px 0 0; }
+.ms-table { min-width: 820px; }
+.ms-table td.title { font-weight: 600; min-width: 220px; }
+.ms-table .tid-cell { font-family: var(--font-num); font-size: 11px; color: var(--muted); white-space: nowrap; }
+@media (max-width: 760px) {
+  .ms-item { grid-template-columns: 1fr; }
+  .ms-item .btn { justify-self: start; }
+}
 .pill-part b { font-family: var(--font-num); margin-left: 2px; }
 
 /* ── 팀원 입력 ── */
@@ -321,6 +386,9 @@ textarea:disabled { background: var(--surface-2); border-color: var(--line); col
 .done-btn:hover { background: var(--accent-soft); }
 .done-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .add-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.entry.flash { animation: flash 1.6s ease-out; border-radius: 8px; }
+@keyframes flash { 0%, 30% { background: var(--accent-soft); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .entry.flash { animation: none; background: var(--accent-soft); } }
 .cell select { width: 100%; }
 select.unset { color: var(--muted); }
 .owners {

@@ -59,11 +59,12 @@
 
   /* ── 바깥 모듈이 탭을 붙이는 자리 (예: dashboard/dashboard.js) ──
    * 기본 화면은 이 모듈들을 몰라도 동작한다. 모듈 스크립트를 빼면 탭도 사라진다.
-   * DR.registerTab({ id, label, mount(viewEl, { store, cfg }), show() })
+   * DR.registerTab({ id, label, mount(viewEl, { store, cfg }), show(), before? })
+   *   before: 이 탭 id 앞에 끼워 넣기 (없으면 맨 뒤)
    */
   const savedTab = DR.storage.get('dr-tab', 'input');
   const extraTabs = new Map();
-  DR.registerTab = ({ id, label, mount, show }) => {
+  DR.registerTab = ({ id, label, mount, show, before }) => {
     if (extraTabs.has(id) || $(`#view-${id}`)) return;
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -73,7 +74,7 @@
     btn.textContent = label;
     btn.setAttribute('aria-selected', 'false');
     btn.onclick = () => setTab(id);
-    $('.tabs').appendChild(btn);
+    $('.tabs').insertBefore(btn, (before && $(`.tabs [data-tab="${before}"]`)) || null);
     const view = document.createElement('main');
     view.id = `view-${id}`;
     view.className = 'view';
@@ -406,6 +407,7 @@
       for (const id of toRemove) await store.remove(id);
       DR.toast(skippedRemoves ? `저장했습니다. 동료가 그사이 수정한 과제 ${skippedRemoves}건은 지우지 않았습니다.` : '저장했습니다.');
       await loadMine();
+      document.dispatchEvent(new CustomEvent('dr:saved'));
     } catch (e) {
       showError(e);
     } finally {
@@ -413,6 +415,32 @@
       updateSavebar();
     }
   }
+
+  // 다른 화면(예: 내 현황)에서 "이 과제 업데이트"를 눌렀을 때: 오늘 보고의 그 과제로 이동
+  // 오늘 목록에 없으면 마지막 보고 내용을 복사해 새 줄로 넣는다 (과제번호 유지)
+  async function openTaskInInput(lastRow) {
+    if (state.inDate !== DR.today()) {
+      if (!(await guard())) return;
+      state.inDate = DR.today();
+      await loadMine();
+    }
+    setTab('input');
+    let r = lastRow.taskId && state.draft.find((x) => x.taskId === lastRow.taskId);
+    if (!r) {
+      state.draft = state.draft.filter((x) => !(x.id.startsWith('tmp-') && isBlank(x)));
+      r = blank(clean(lastRow));
+      state.draft.push(r);
+      renderInput();
+    }
+    const el = $(`#entries [data-id="${r.id}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.remove('flash');
+    void el.offsetWidth; // 애니메이션 다시 시작
+    el.classList.add('flash');
+    el.querySelector('[data-f="progress"]')?.focus({ preventScroll: true });
+  }
+  DR.app = { openTaskInInput, me: () => state.me, store };
 
   // 저장 안 된 변경이 있으면 이동 전에 확인
   async function guard() {
@@ -428,8 +456,10 @@
 
   // 이름과 내 소속파트는 브라우저(크롬)에 저장해 다음에도 그대로 쓴다
   function setMe(name, part) {
+    const changed = state.me !== name;
     state.me = name;
     DR.storage.set('dr-me-v2', name);
+    if (changed) setTimeout(() => document.dispatchEvent(new CustomEvent('dr:me-changed')));
     if (part !== undefined) setMyPart(part);
     else state.myPart = DR.storage.get(`dr-part:${name}`, '');
   }

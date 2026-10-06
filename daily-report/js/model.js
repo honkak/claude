@@ -39,6 +39,68 @@
   };
   M.byOwner = (a, b) => M.memberRank(a) - M.memberRank(b) || M.byTime(a, b);
 
+  /* ── 과제 상태 판단 (팀장 대시보드와 '내 현황'이 같은 기준을 쓴다) ── */
+  M.rules = () => ({ STALL_DAYS: 30, WARN_DAYS: 21, NO_REPORT_DAYS: 7, ...(cfg().TASK_RULES || {}) });
+
+  // a에서 b까지 지난 날수 (달력 기준)
+  M.daysBetween = (a, b) => Math.round((DR.parseDate(b) - DR.parseDate(a)) / 86400000);
+
+  // 과제번호(P1-261005-01)에 담긴 등록일
+  M.registeredOf = (id, fallback) => {
+    const m = String(id || '').match(/-(\d{2})(\d{2})(\d{2})-/);
+    return m ? `20${m[1]}-${m[2]}-${m[3]}` : fallback;
+  };
+
+  // 날마다 쌓인 보고 줄을 과제번호 단위로 묶어, 과제마다 현재 상태를 계산한다
+  //   status: active(진행 중) / stalled(정체: 진행율이 STALL_DAYS 이상 그대로) / done(완료)
+  //   warn: 아직 정체는 아니지만 WARN_DAYS 이상 그대로 → 곧 팀장 화면에 정체로 뜸
+  M.buildTasks = (rows, today = DR.today()) => {
+    const { STALL_DAYS, WARN_DAYS } = M.rules();
+    const groups = new Map();
+    for (const r of rows) {
+      const key = r.taskId || `${r.author}|${String(r.title).trim()}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(r);
+    }
+    const tasks = [];
+    for (const [key, list] of groups) {
+      list.sort((a, b) => a.date.localeCompare(b.date) || M.byTime(a, b));
+      const last = list[list.length - 1];
+      const done = M.isDone(last.progress);
+      // 진행율이 마지막으로 바뀐 날 (뒤에서부터 같은 진행율이 이어진 첫날)
+      let changeDate = last.date;
+      for (let i = list.length - 2; i >= 0; i--) {
+        if (String(list[i].progress).trim() !== String(last.progress).trim()) break;
+        changeDate = list[i].date;
+      }
+      const doneRow = done ? list.find((r) => M.isDone(r.progress)) : null;
+      const idle = M.daysBetween(changeDate, today);
+      const status = done ? 'done' : idle >= STALL_DAYS ? 'stalled' : 'active';
+      tasks.push({
+        id: last.taskId || '',
+        key,
+        part: M.partOf(last),
+        title: String(last.title || last.content || '').trim(),
+        owners: M.ownersOf(last),
+        authors: [...new Set(list.map((r) => r.author).filter(Boolean))],
+        progress: String(last.progress || '').trim(),
+        pct: M.percentOf(last.progress),
+        registered: M.registeredOf(last.taskId, list[0].date),
+        lastSeen: last.date,
+        sinceReport: M.daysBetween(last.date, today),
+        changeDate,
+        idle,
+        stallIn: STALL_DAYS - idle, // 정체로 잡히기까지 남은 날
+        warn: status === 'active' && idle >= WARN_DAYS,
+        doneDate: doneRow ? doneRow.date : null,
+        status,
+        last,
+        history: list,
+      });
+    }
+    return tasks;
+  };
+
   DR.model = M;
 
   // 설정에 따라 저장소를 고른다 (store-*.js가 먼저 로드되어 있어야 함)
