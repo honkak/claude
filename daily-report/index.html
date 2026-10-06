@@ -68,6 +68,7 @@
           <button type="button" class="btn add" id="add-entry">+ 빈 업무 추가</button>
           <button type="button" class="btn add" id="open-loader">+ 지난 업무에서 불러오기</button>
         </div>
+        <div id="paused" class="paused" hidden></div>
       </section>
 
       <div class="savebar">
@@ -164,6 +165,7 @@
           <option value="0">전체</option>
         </select>
       </label>
+      <label class="check"><input type="checkbox" id="ldr-open" checked> 끝나지 않은 과제만</label>
       <input type="search" id="ldr-q" placeholder="제목·내용·담당자 검색" aria-label="검색어">
     </div>
     <p id="ldr-count" class="meta"></p>

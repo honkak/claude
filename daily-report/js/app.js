@@ -16,6 +16,8 @@
     server: [], // 서버에 저장된 내 행
     draft: [], // 화면에서 편집 중인 내 행
     carryFrom: null, // 이월해 온 보고의 날짜
+    paused: [], // 쉬고 있는 내 과제 (끝나지 않았지만 오늘 목록에 없는 것)
+    pausedAll: false, // 쉬고 있는 과제를 모두 펼쳐 볼지
     saving: false,
     ld: {
       mode: DR.storage.get('dr-ld-mode', 'day'),
@@ -181,7 +183,7 @@
       : `<button type="button" class="done-btn" data-done aria-pressed="${done}">${done ? '✓ 완료됨' : '완료'}</button>`;
     const cls = ['entry', r.carried ? 'carried' : '', done ? 'is-done' : ''].join(' ');
     return `<div class="${cls}" data-id="${r.id}">
-      <span class="entry-no">${i + 1}<small class="tid" title="과제번호">${tagIdHtml(r.taskId)}</small>${r.carried ? '<small>이월</small>' : ''}${
+      <span class="entry-no">${i + 1}<small class="tid" title="과제번호">${tagIdHtml(r.taskId)}</small>${r.carried ? '<small>이월</small>' : ''}${r.resumed ? '<small class="resumed">재개</small>' : ''}${
         !r.id.startsWith('tmp-') && r.editor && r.editor !== state.me ? `<small class="by">${DR.esc(r.editor)} 수정</small>` : ''
       }</span>
       <label class="cell c-part"><span class="cell-label">소속파트</span>${partSelect(r.part, dis)}</label>
@@ -219,6 +221,7 @@
       ? state.draft.map((r, i) => entryHtml(r, i, ro)).join('')
       : '<p class="rows-empty">이 날짜에 작성한 업무가 없습니다.</p>';
     $('#view-input .add-row').hidden = ro;
+    renderPaused();
     autosizeAll();
     updateSavebar();
   }
@@ -259,6 +262,62 @@
     open.forEach((r) => state.draft.push(blank({ ...clean(r), carried: true })));
   }
 
+  // 쉬고 있는 내 과제: 최근 RESUME_LOOKBACK_DAYS 안에서 끝나지 않은 내 과제 (오늘 목록에 있는 것은 화면에서 뺀다)
+  async function loadPaused() {
+    state.paused = [];
+    state.pausedAll = false;
+    if (!editable()) return;
+    const days = cfg.RESUME_LOOKBACK_DAYS || 180;
+    const rows = (await store.list({ from: DR.addDays(state.inDate, -days), to: DR.addDays(state.inDate, -1) })).filter((r) => involves(r));
+    state.paused = DR.model
+      .buildTasks(rows, state.inDate)
+      .filter((t) => t.status !== 'done')
+      .sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
+  }
+
+  function renderPaused() {
+    const box = $('#paused');
+    const inToday = new Set(state.draft.map((r) => r.taskId).filter(Boolean));
+    const list = editable() ? state.paused.filter((t) => !t.id || !inToday.has(t.id)) : [];
+    box.hidden = !list.length;
+    if (!list.length) return (box.innerHTML = '');
+    const shown = state.pausedAll ? list : list.slice(0, 5);
+    box.innerHTML = `
+      <div class="paused-head">
+        <b>쉬고 있는 내 과제 ${list.length}건</b>
+        <span class="meta">끝나지 않았지만 오늘 목록에 없는 과제입니다. 다시 추진할 과제는 [이어서 하기]를 누르면 같은 과제번호로 이어집니다.</span>
+      </div>
+      <ul class="paused-list">${shown
+        .map((t) => {
+          const rest = DR.model.daysBetween(t.lastSeen, state.inDate);
+          return `<li>
+            <span class="tid-cell">${DR.esc(t.id)}</span>
+            <span class="paused-title">${DR.esc(String(t.title).split('\n')[0])}</span>
+            <span class="meta">${DR.esc(t.part)} · 진행율 ${DR.esc(t.progress || '-')} · 마지막 보고 ${DR.shortDate(t.lastSeen)} <b class="${rest >= 20 ? 'rest-long' : ''}">(${rest}일 쉼)</b></span>
+            <button type="button" class="btn small" data-resume="${DR.esc(t.key)}">이어서 하기</button>
+          </li>`;
+        })
+        .join('')}</ul>
+      ${list.length > shown.length ? `<button type="button" class="btn ghost small" data-paused-all>${list.length - shown.length}건 더 보기</button>` : ''}`;
+  }
+
+  // 쉬던 과제를 오늘 목록으로: 마지막 보고 내용·진행율을 그대로 가져오고 과제번호를 유지한다
+  function resumeTask(key) {
+    const t = state.paused.find((x) => x.key === key);
+    if (!t) return;
+    state.draft = state.draft.filter((x) => !(x.id.startsWith('tmp-') && isBlank(x)));
+    const r = blank({ ...clean(t.last), resumed: true });
+    state.draft.push(r);
+    renderInput();
+    const el = $(`#entries [data-id="${r.id}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('flash');
+      el.querySelector('[data-f="progress"]')?.focus({ preventScroll: true });
+    }
+    DR.toast(`${DR.shortDate(t.lastSeen)} 보고에서 이어서 합니다 (${DR.model.daysBetween(t.lastSeen, state.inDate)}일 만). 진행율을 고친 뒤 저장하세요.`);
+  }
+
   async function loadMine() {
     state.carryFrom = null;
     if (!state.me) return renderInput();
@@ -271,6 +330,7 @@
       state.draft = rows.map((r) => ({ ...r }));
       if (editable() && !rows.some((r) => r.author === state.me)) await carryOver();
       if (editable() && !state.draft.length) state.draft.push(blank());
+      await loadPaused();
     } catch (e) {
       state.server = [];
       state.draft = [];
@@ -528,7 +588,9 @@
     try {
       const all = await fetchLoaderRows();
       const words = $('#ldr-q').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const openOnly = $('#ldr-open').checked;
       const hit = (r) => {
+        if (openOnly && isDone(r.progress)) return false;
         const hay = `${r.taskId} ${r.part} ${r.title} ${r.content} ${r.note} ${ownersOf(r).join(' ')}`.toLowerCase();
         return words.every((w) => hay.includes(w));
       };
@@ -541,9 +603,11 @@
         ? loader.items
             .map((r, i) => {
               const on = loader.picked.has(r.id);
-              return `<label class="ldr-item ${on ? 'on' : ''}">
-                <input type="checkbox" data-i="${i}" ${on ? 'checked' : ''}>
-                <span class="ldr-meta">${DR.esc(tagId(r.taskId))} · ${DR.shortDate(r.date)} · ${DR.esc(ownersOf(r).join(', '))}${r.part ? ` · ${DR.esc(r.part)}` : ''}${
+              const already = r.taskId && !isDone(r.progress) && state.draft.some((d) => d.taskId === r.taskId);
+              const rest = DR.model.daysBetween(r.date, state.inDate);
+              return `<label class="ldr-item ${on ? 'on' : ''} ${already ? 'is-in' : ''}">
+                <input type="checkbox" data-i="${i}" ${on ? 'checked' : ''} ${already ? 'disabled' : ''}>
+                <span class="ldr-meta">${already ? '<b class="ok">오늘 목록에 있음</b> · ' : ''}${DR.esc(tagId(r.taskId))} · ${DR.shortDate(r.date)} (${rest}일 전) · ${DR.esc(ownersOf(r).join(', '))}${r.part ? ` · ${DR.esc(r.part)}` : ''}${
                   r.progress ? ` · <span class="${isDone(r.progress) ? 'ok' : ''}">${DR.esc(r.progress)}</span>` : ''
                 }</span>
                 <span class="ldr-title">${DR.esc(r.title)}</span>
@@ -591,7 +655,11 @@
       const taskId = !isDone(r.progress) && r.taskId ? r.taskId : undefined;
       if (taskId && have.has(taskId)) return dup++;
       if (taskId) have.add(taskId);
-      state.draft.push(blank({ taskId, part: r.part, title: r.title, content: r.content, owners: taskId ? r.owners : state.me }));
+      state.draft.push(
+        taskId
+          ? blank({ ...clean(r), note: '', resumed: true }) // 이어서 하기: 마지막 진행율까지 가져온다
+          : blank({ part: r.part, title: r.title, content: r.content, owners: state.me })
+      );
       added++;
     });
     closeLoader();
@@ -608,7 +676,7 @@
     $('#open-loader').onclick = openLoader;
     $('#loader-close').onclick = $('#ldr-cancel').onclick = closeLoader;
     $('#ldr-add').onclick = addFromLoader;
-    $('#ldr-who').onchange = $('#ldr-period').onchange = refreshLoader;
+    $('#ldr-who').onchange = $('#ldr-period').onchange = $('#ldr-open').onchange = refreshLoader;
     let t;
     $('#ldr-q').addEventListener('input', () => {
       clearTimeout(t);
@@ -660,6 +728,15 @@
     $('#in-today').onclick = () => goInputDate(DR.today());
     $('#add-entry').onclick = addEntry;
     $('#save-btn').onclick = save;
+
+    $('#paused').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-resume]');
+      if (b) return resumeTask(b.dataset.resume);
+      if (e.target.closest('[data-paused-all]')) {
+        state.pausedAll = true;
+        renderPaused();
+      }
+    });
 
     const box = $('#entries');
     const rowOf = (el) => state.draft.find((x) => x.id === el.closest('[data-id]')?.dataset.id);

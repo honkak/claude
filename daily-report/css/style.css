@@ -387,6 +387,32 @@ textarea:disabled { background: var(--surface-2); border-color: var(--line); col
 .done-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .add-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .entry.flash { animation: flash 1.6s ease-out; border-radius: 8px; }
+.entry-no small.resumed { color: var(--accent); font-weight: 700; }
+.ldr-item.is-in { opacity: 0.6; cursor: default; }
+
+/* 쉬고 있는 내 과제 */
+.paused { display: grid; gap: 8px; margin-top: 6px; padding: 12px 14px; border: 1px dashed var(--line-strong); border-radius: 8px; }
+.paused-head { display: grid; gap: 2px; }
+.paused-head .meta { margin: 0; }
+.paused-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.paused-list li {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.paused-list li:first-child { border-top: 0; }
+.paused-list .tid-cell { font-family: var(--font-num); font-size: 11px; color: var(--muted); }
+.paused-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.paused-list .meta { margin: 0; }
+.rest-long { color: var(--warn); }
+@media (max-width: 760px) {
+  .paused-list li { grid-template-columns: 1fr auto; }
+  .paused-list .tid-cell, .paused-list .meta { grid-column: 1; }
+  .paused-list .btn { grid-row: 1 / span 3; grid-column: 2; }
+}
 @keyframes flash { 0%, 30% { background: var(--accent-soft); } 100% { background: transparent; } }
 @media (prefers-reduced-motion: reduce) { .entry.flash { animation: none; background: var(--accent-soft); } }
 .cell select { width: 100%; }

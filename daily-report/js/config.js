@@ -29,6 +29,9 @@ window.APP_CONFIG = {
   // 오늘 보고를 쓸 때, 며칠 전 보고까지 거슬러 올라가 미완료 업무를 이월할지
   CARRY_LOOKBACK_DAYS: 14,
 
+  // '쉬고 있는 내 과제'(끝나지 않았지만 오늘 목록에 없는 과제)를 며칠 전까지 찾아 보여줄지
+  RESUME_LOOKBACK_DAYS: 180,
+
   // 며칠 전 보고까지 수정을 허용할지 (0 = 오늘 것만 수정 가능)
   EDIT_PAST_DAYS: 0,
 

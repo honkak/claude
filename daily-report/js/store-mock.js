@@ -4,7 +4,7 @@
  * goodocs 어댑터와 똑같은 함수(list/create/update/remove)를 제공한다.
  */
 (function (DR) {
-  const KEY = 'dr-mock-rows-v10';
+  const KEY = 'dr-mock-rows-v12';
   let rows = null;
 
   // 예시 업무: [분야(참고용), 제목, 내용]
@@ -97,6 +97,15 @@
         const base = same[0].progress === '완료' ? '40%' : same[0].progress;
         same.forEach((r) => (r.progress = base));
       }
+    }
+    // '쉬고 있는 내 과제' 예시: 다섯 번째 팀원이 진행하던 과제 하나를 약 26일 전부터 보고하지 않은 것으로 만든다
+    const pauseFrom = DR.addDays(today, -26);
+    const pauseDay = [...days].reverse().find((d) => d <= pauseFrom);
+    const pausable = out.find(
+      (r) => r.author === warnWho && r.date === pauseDay && r.progress !== '완료' && (!cand || r.taskId !== cand.taskId)
+    );
+    if (pausable) {
+      for (let i = out.length - 1; i >= 0; i--) if (out[i].taskId === pausable.taskId && out[i].date > pauseFrom) out.splice(i, 1);
     }
     // 오늘은 앞의 4명만 이미 제출한 상태로 시작 (이월 업무를 그대로 제출했다고 가정)
     const last = days[days.length - 1];
