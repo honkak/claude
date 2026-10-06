@@ -103,17 +103,29 @@
 
   DR.model = M;
 
-  /* ── 올해 데이터 (기준일: 매년 1월 1일) ──
-   * 이월·쉬는 과제·불러오기·내 현황·대시보드는 모두 '올해 1월 1일 ~ 오늘' 데이터를 함께 쓴다.
+  /* ── 기준 범위 데이터 (설정 DATA_RANGE: 기본은 매년 1월 1일 ~ 오늘, 또는 최근 N일) ──
+   * 이월·쉬는 과제·불러오기·내 현황·대시보드는 모두 이 범위의 데이터를 함께 쓴다.
    * 한 번 읽은 것을 잠시(60초) 재사용하고, 저장하면 비운다 → 저장소 조회 횟수를 줄인다.
    */
-  M.yearStart = (date = DR.today()) => `${String(date).slice(0, 4)}-${cfg().YEAR_START || '01-01'}`;
+  const range = () => ({ MODE: 'year', YEAR_START: cfg().YEAR_START || '01-01', DAYS: 180, ...(cfg().DATA_RANGE || {}) });
+  M.baseStart = (date = DR.today()) => {
+    const r = range();
+    return r.MODE === 'days' ? DR.addDays(date, -Number(r.DAYS || 180)) : `${String(date).slice(0, 4)}-${r.YEAR_START}`;
+  };
+  // 화면에 보여줄 기준 이름 (예: '올해 (1월 1일부터)', '최근 180일')
+  M.baseLabel = () => {
+    const r = range();
+    if (r.MODE === 'days') return `최근 ${r.DAYS}일`;
+    const [m, d] = r.YEAR_START.split('-').map(Number);
+    return `올해 (${m}월 ${d}일부터)`;
+  };
+  M.yearStart = M.baseStart; // 예전 이름
 
   const yearCache = new WeakMap(); // store → { year, at, rows, promise }
   M.invalidate = (store) => (store ? yearCache.delete(store) : null);
-  M.yearRows = async (store, { force = false } = {}) => {
+  M.baseRows = async (store, { force = false } = {}) => {
     const today = DR.today();
-    const from = M.yearStart(today);
+    const from = M.baseStart(today);
     const c = yearCache.get(store);
     if (!force && c && c.from === from && Date.now() - c.at < 60000) return c.promise;
     const promise = store.list({ from, to: today });
@@ -121,11 +133,12 @@
     promise.catch(() => yearCache.delete(store));
     return promise;
   };
-  // from~to 구간 보고. 올해 안이면 공유 데이터에서 거르고, 작년까지 걸치면 저장소에서 직접 읽는다
+  M.yearRows = (store, o) => M.baseRows(store, o); // 예전 이름
+  // from~to 구간 보고. 기준 범위 안이면 공유 데이터에서 거르고, 벗어나면 저장소에서 직접 읽는다
   M.rangeRows = async (store, from, to) => {
     const today = DR.today();
-    if (from && from >= M.yearStart(today) && (!to || to <= today)) {
-      const rows = await M.yearRows(store);
+    if (from && from >= M.baseStart(today) && (!to || to <= today)) {
+      const rows = await M.baseRows(store);
       return rows.filter((r) => r.date >= from && (!to || r.date <= to));
     }
     return store.list({ from, to });

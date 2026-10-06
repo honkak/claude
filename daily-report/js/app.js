@@ -262,12 +262,12 @@
     open.forEach((r) => state.draft.push(blank({ ...clean(r), carried: true })));
   }
 
-  // 쉬고 있는 내 과제: 올해(1월 1일~) 끝나지 않은 내 과제 (오늘 목록에 있는 것은 화면에서 뺀다)
+  // 쉬고 있는 내 과제: 기준 범위(기본 올해 1월 1일~) 안에서 끝나지 않은 내 과제 (오늘 목록에 있는 것은 화면에서 뺀다)
   async function loadPaused() {
     state.paused = [];
     state.pausedAll = false;
     if (!editable()) return;
-    const rows = (await DR.model.rangeRows(store, DR.model.yearStart(state.inDate), DR.addDays(state.inDate, -1))).filter((r) => involves(r));
+    const rows = (await DR.model.rangeRows(store, DR.model.baseStart(state.inDate), DR.addDays(state.inDate, -1))).filter((r) => involves(r));
     state.paused = DR.model
       .buildTasks(rows, state.inDate)
       .filter((t) => t.status !== 'done')
@@ -562,12 +562,12 @@
 
   async function fetchLoaderRows() {
     const who = $('#ldr-who').value;
-    const period = $('#ldr-period').value; // 'year' = 올해 1월 1일부터, 숫자 = 최근 N일, '0' = 전체
+    const period = $('#ldr-period').value; // 'base' = 설정의 기준 범위(기본 올해 1월 1일부터), 숫자 = 최근 N일, '0' = 전체
     const key = `${who}|${period}|${state.inDate}`;
     if (!loader.cache.has(key)) {
       const to = DR.addDays(state.inDate, -1);
       const from =
-        period === 'year' ? DR.model.yearStart(state.inDate) : Number(period) ? DR.addDays(state.inDate, -Number(period)) : undefined;
+        period === 'base' ? DR.model.baseStart(state.inDate) : Number(period) ? DR.addDays(state.inDate, -Number(period)) : undefined;
       const rows = await DR.model.rangeRows(store, from, to);
       // 작성자이거나 담당자로 들어간 업무
       const mine = who === '*' ? rows : rows.filter((r) => r.author === who || ownersOf(r).includes(who));
@@ -630,6 +630,7 @@
   }
 
   function openLoader() {
+    $('#ldr-period option[value="base"]').textContent = DR.model.baseLabel();
     const others = cfg.MEMBERS.filter((m) => m !== state.me);
     $('#ldr-who').innerHTML =
       `<option value="${DR.esc(state.me)}">내 업무</option><option value="*">팀 전체</option>` +

@@ -35,8 +35,8 @@
       if (!st.me) return render();
       const today = DR.today();
       try {
-        // 올해(1월 1일~) 데이터를 공유해서 쓴다
-        const rows = await M.yearRows(store);
+        // 기준 범위(기본 올해 1월 1일~) 데이터를 공유해서 쓴다
+        const rows = await M.baseRows(store);
         const mine = rows.filter((r) => r.author === st.me || M.ownersOf(r).includes(st.me));
         st.tasks = M.buildTasks(mine, today);
         st.todayRows = mine.filter((r) => r.date === today);
