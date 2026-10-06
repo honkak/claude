@@ -15,7 +15,7 @@
 (function (DR) {
   const M = DR.model;
   const cfg = () => window.APP_CONFIG;
-  const opts = () => ({ TAB_IN_MAIN_APP: true, STALL_WORKDAYS: 5, DEFAULT_WEEKS: 8, ...(cfg().DASHBOARD || {}) });
+  const opts = () => ({ TAB_IN_MAIN_APP: true, STALL_DAYS: 30, DEFAULT_WEEKS: 8, ...(cfg().DASHBOARD || {}) });
   const $ = (sel, root) => root.querySelector(sel);
 
   const STATUS = {
@@ -26,12 +26,8 @@
 
   /* ───────── 날짜 ───────── */
 
-  // a 다음 날부터 b까지의 근무일 수
-  function workdaysBetween(a, b) {
-    let n = 0;
-    for (let d = DR.addDays(a, 1); d <= b; d = DR.addDays(d, 1)) if (!DR.isWeekend(d)) n++;
-    return n;
-  }
+  // a에서 b까지 지난 날수 (달력 기준)
+  const daysBetween = (a, b) => Math.round((DR.parseDate(b) - DR.parseDate(a)) / 86400000);
   // 과제번호(P1-261005-01)에 담긴 등록일
   function registeredOf(id, fallback) {
     const m = String(id || '').match(/-(\d{2})(\d{2})(\d{2})-/);
@@ -60,7 +56,7 @@
         changeDate = list[i].date;
       }
       const doneRow = done ? list.find((r) => M.isDone(r.progress)) : null;
-      const idle = workdaysBetween(changeDate, today);
+      const idle = daysBetween(changeDate, today);
       tasks.push({
         id: last.taskId || '',
         key,
@@ -74,7 +70,7 @@
         changeDate,
         idle,
         doneDate: doneRow ? doneRow.date : null,
-        status: done ? 'done' : idle >= opts().STALL_WORKDAYS ? 'stalled' : 'active',
+        status: done ? 'done' : idle >= opts().STALL_DAYS ? 'stalled' : 'active',
         history: list,
       });
     }
@@ -223,8 +219,9 @@
       ref('when').textContent = '불러오는 중…';
       try {
         const today = DR.today();
-        // 기간 앞쪽에 시작한 과제의 이력까지 보이도록 4주를 더 읽는다
-        const from = DR.addDays(DR.weekStart(today), -7 * (st.weeks + 3));
+        // 기간 앞쪽에 시작한 과제의 이력과, 정체 기준(30일)을 판단할 만큼 넉넉히 더 읽는다
+        const back = Math.max(7 * (st.weeks + 3), opts().STALL_DAYS + 21);
+        const from = DR.addDays(DR.weekStart(today), -back);
         const rows = await store.list({ from, to: today });
         st.tasks = buildTasks(rows, today);
         st.loadedAt = new Date();
@@ -278,7 +275,7 @@
           <span class="kpi-sub">평균 진행율 ${avg ?? '-'}%</span></div>
         <div class="kpi ${stalled.length ? 'is-warn' : ''}"><span class="kpi-label">${stalled.length ? '<i class="warn-icon" aria-hidden="true">!</i>' : ''}정체 과제</span>
           <span class="kpi-val">${stalled.length}<small>건</small></span>
-          <span class="kpi-sub">${opts().STALL_WORKDAYS}근무일 이상 진행율 변화 없음</span></div>
+          <span class="kpi-sub">${opts().STALL_DAYS}일 이상 진행율 변화 없음</span></div>
         <div class="kpi"><span class="kpi-label">이번 주 신규 등록</span><span class="kpi-val">${newThis}<small>건</small></span>
           <span class="kpi-sub">지난주 ${newPrev}건</span></div>
         <div class="kpi"><span class="kpi-label">이번 주 완료</span><span class="kpi-val">${doneThis}<small>건</small></span>
@@ -372,7 +369,7 @@
           : `<span class="pbar"><span class="s-${t.status}" style="width:${t.pct}%"></span></span><b>${DR.esc(t.progress)}</b>`;
       const ago = (t) => {
         if (t.status === 'done') return `${DR.shortDate(t.doneDate)} 완료`;
-        return t.idle ? `${t.idle}근무일째 변화 없음` : '오늘 갱신';
+        return t.idle ? `${t.idle}일째 변화 없음` : '오늘 갱신';
       };
       ref('table').innerHTML = `<table class="sheet dash-table">
         <thead><tr><th>상태</th><th>과제번호</th><th>소속파트</th><th>제목</th><th>담당자</th><th>진행율</th><th>등록일</th><th>최근 보고</th><th>진행율 변화</th></tr></thead>

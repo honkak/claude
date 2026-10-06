@@ -38,7 +38,7 @@ window.APP_CONFIG = {
   // 팀장용 과제관리 대시보드 (dashboard/ 폴더)
   DASHBOARD: {
     TAB_IN_MAIN_APP: true, // false면 일반 화면에서 대시보드 탭을 숨김 (dashboard/index.html 단독 페이지는 그대로 사용)
-    STALL_WORKDAYS: 5, // 진행율이 이 근무일 수 이상 그대로면 '정체'
+    STALL_DAYS: 30, // 진행율이 이 일수(달력 기준) 이상 그대로면 '정체'. 한 달 안에는 정체로 잡지 않음
     DEFAULT_WEEKS: 8, // 처음 보여줄 기간(주)
   },
 };
