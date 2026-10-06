@@ -33,11 +33,10 @@
     async function load() {
       st.me = DR.app.me();
       if (!st.me) return render();
-      const { STALL_DAYS } = M.rules();
       const today = DR.today();
       try {
-        // 정체 판단에 필요한 만큼 넉넉히 읽는다
-        const rows = await store.list({ from: DR.addDays(today, -(STALL_DAYS + 60)), to: today });
+        // 올해(1월 1일~) 데이터를 공유해서 쓴다
+        const rows = await M.yearRows(store);
         const mine = rows.filter((r) => r.author === st.me || M.ownersOf(r).includes(st.me));
         st.tasks = M.buildTasks(mine, today);
         st.todayRows = mine.filter((r) => r.date === today);

@@ -15,7 +15,7 @@
 (function (DR) {
   const M = DR.model;
   const cfg = () => window.APP_CONFIG;
-  const opts = () => ({ TAB_IN_MAIN_APP: true, DEFAULT_WEEKS: 8, ...(cfg().DASHBOARD || {}) });
+  const opts = () => ({ TAB_IN_MAIN_APP: true, DEFAULT_WEEKS: 0, ...(cfg().DASHBOARD || {}) });
   const $ = (sel, root) => root.querySelector(sel);
 
   const STATUS = {
@@ -59,7 +59,7 @@
 
   function create(store) {
     const st = {
-      weeks: DR.storage.get('dr-dash-weeks', opts().DEFAULT_WEEKS),
+      weeks: DR.storage.get('dr-dash-period', opts().DEFAULT_WEEKS), // 0 = 올해(1월 1일부터)
       part: '',
       status: 'open', // open = 진행 중 + 정체
       q: '',
@@ -76,7 +76,9 @@
             <div class="dash-title"><h2>과제 관리 대시보드</h2><span class="meta" data-ref="when"></span></div>
             <label class="field"><span>기간</span>
               <select data-ref="weeks">
-                ${[4, 8, 12, 26].map((w) => `<option value="${w}" ${w === st.weeks ? 'selected' : ''}>최근 ${w}주</option>`).join('')}
+                ${[[0, '올해 (1월 1일부터)'], [4, '최근 4주'], [8, '최근 8주'], [12, '최근 12주']]
+                  .map(([w, t]) => `<option value="${w}" ${w === st.weeks ? 'selected' : ''}>${t}</option>`)
+                  .join('')}
               </select>
             </label>
             <label class="field"><span>소속파트</span><select data-ref="part"></select></label>
@@ -124,7 +126,7 @@
       const ref = (n) => $(`[data-ref="${n}"]`, root);
       ref('weeks').onchange = (e) => {
         st.weeks = Number(e.target.value);
-        DR.storage.set('dr-dash-weeks', st.weeks);
+        DR.storage.set('dr-dash-period', st.weeks);
         load();
       };
       ref('part').onchange = (e) => {
@@ -170,10 +172,8 @@
       ref('when').textContent = '불러오는 중…';
       try {
         const today = DR.today();
-        // 기간 앞쪽에 시작한 과제의 이력과, 정체 기준(30일)을 판단할 만큼 넉넉히 더 읽는다
-        const back = Math.max(7 * (st.weeks + 3), stallDays() + 21);
-        const from = DR.addDays(DR.weekStart(today), -back);
-        const rows = await store.list({ from, to: today });
+        // 올해(1월 1일~오늘) 데이터를 일반 화면과 함께 쓴다
+        const rows = await M.yearRows(store, { force: true });
         st.tasks = buildTasks(rows, today);
         st.loadedAt = new Date();
       } catch (e) {
@@ -186,7 +186,7 @@
 
     // 화면에 쓰는 과제: 현재 진행 중·정체 전부 + 기간 안에 완료된 것
     function scoped() {
-      const since = DR.addDays(DR.weekStart(DR.today()), -7 * (st.weeks - 1));
+      const since = st.weeks ? DR.addDays(DR.weekStart(DR.today()), -7 * (st.weeks - 1)) : M.yearStart();
       return {
         since,
         tasks: st.tasks.filter((t) => (!st.part || t.part === st.part) && (t.status !== 'done' || t.doneDate >= since)),
@@ -249,7 +249,10 @@
       const pool = st.tasks.filter((t) => !st.part || t.part === st.part);
       const thisWk = DR.weekStart(DR.today());
       const weeks = [];
-      for (let i = st.weeks - 1; i >= 0; i--) weeks.push(DR.addDays(thisWk, -7 * i));
+      // '올해'면 1월 1일이 속한 주부터 이번 주까지
+      const n = st.weeks || Math.round((DR.parseDate(thisWk) - DR.parseDate(DR.weekStart(M.yearStart()))) / (7 * 86400000)) + 1;
+      for (let i = n - 1; i >= 0; i--) weeks.push(DR.addDays(thisWk, -7 * i));
+      const every = Math.ceil(n / 12); // 주가 많으면 아래 날짜는 띄엄띄엄
       const data = weeks.map((w) => {
         const end = DR.addDays(w, 7);
         return {
@@ -275,7 +278,14 @@
               .join('')}
           </div>
         </div>
-        <div class="cols-x">${data.map((d) => `<span class="${d.w === thisWk ? 'is-now' : ''}">${d.w === thisWk ? '이번 주' : DR.shortDate(d.w)}</span>`).join('')}</div>`;
+        <div class="cols-x">${data
+          .map((d, i) => {
+            const now = d.w === thisWk;
+            const show = now || (n - 1 - i) % every === 0;
+            const start = d.w < M.yearStart() ? M.yearStart() : d.w; // 1월 1일이 낀 주는 1/1로 표시
+            return `<span class="${now ? 'is-now' : ''}">${now ? '이번 주' : show ? DR.shortDate(start) : ''}</span>`;
+          })
+          .join('')}</div>`;
     }
 
     function renderByOwner() {

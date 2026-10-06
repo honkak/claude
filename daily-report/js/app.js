@@ -247,7 +247,7 @@
   // 내가 담당자인 공동 과제도 포함하되, 오늘 이미 누가 올린 과제(같은 번호)는 뺀다
   async function carryOver() {
     const from = DR.addDays(state.inDate, -cfg.CARRY_LOOKBACK_DAYS);
-    const prev = (await store.list({ from, to: DR.addDays(state.inDate, -1) })).filter((r) => involves(r));
+    const prev = (await DR.model.rangeRows(store, from, DR.addDays(state.inDate, -1))).filter((r) => involves(r));
     if (!prev.length) return;
     const last = prev.reduce((m, r) => (r.date > m ? r.date : m), '');
     const have = new Set(state.draft.map((r) => r.taskId).filter(Boolean));
@@ -262,13 +262,12 @@
     open.forEach((r) => state.draft.push(blank({ ...clean(r), carried: true })));
   }
 
-  // 쉬고 있는 내 과제: 최근 RESUME_LOOKBACK_DAYS 안에서 끝나지 않은 내 과제 (오늘 목록에 있는 것은 화면에서 뺀다)
+  // 쉬고 있는 내 과제: 올해(1월 1일~) 끝나지 않은 내 과제 (오늘 목록에 있는 것은 화면에서 뺀다)
   async function loadPaused() {
     state.paused = [];
     state.pausedAll = false;
     if (!editable()) return;
-    const days = cfg.RESUME_LOOKBACK_DAYS || 180;
-    const rows = (await store.list({ from: DR.addDays(state.inDate, -days), to: DR.addDays(state.inDate, -1) })).filter((r) => involves(r));
+    const rows = (await DR.model.rangeRows(store, DR.model.yearStart(state.inDate), DR.addDays(state.inDate, -1))).filter((r) => involves(r));
     state.paused = DR.model
       .buildTasks(rows, state.inDate)
       .filter((t) => t.status !== 'done')
@@ -466,6 +465,7 @@
       for (const [id, r] of toUpdate) await store.update(id, { ...clean(r), ...stamp });
       for (const id of toRemove) await store.remove(id);
       DR.toast(skippedRemoves ? `저장했습니다. 동료가 그사이 수정한 과제 ${skippedRemoves}건은 지우지 않았습니다.` : '저장했습니다.');
+      DR.model.invalidate(store); // 저장했으니 공유 데이터를 새로 읽게 한다
       await loadMine();
       document.dispatchEvent(new CustomEvent('dr:saved'));
     } catch (e) {
@@ -562,13 +562,13 @@
 
   async function fetchLoaderRows() {
     const who = $('#ldr-who').value;
-    const days = Number($('#ldr-period').value);
-    const key = `${who}|${days}|${state.inDate}`;
+    const period = $('#ldr-period').value; // 'year' = 올해 1월 1일부터, 숫자 = 최근 N일, '0' = 전체
+    const key = `${who}|${period}|${state.inDate}`;
     if (!loader.cache.has(key)) {
-      const rows = await store.list({
-        from: days ? DR.addDays(state.inDate, -days) : undefined,
-        to: DR.addDays(state.inDate, -1),
-      });
+      const to = DR.addDays(state.inDate, -1);
+      const from =
+        period === 'year' ? DR.model.yearStart(state.inDate) : Number(period) ? DR.addDays(state.inDate, -Number(period)) : undefined;
+      const rows = await DR.model.rangeRows(store, from, to);
       // 작성자이거나 담당자로 들어간 업무
       const mine = who === '*' ? rows : rows.filter((r) => r.author === who || ownersOf(r).includes(who));
       // 같은 사람의 같은 업무는 여러 날 반복되므로, 가장 최근 것 하나만 남긴다

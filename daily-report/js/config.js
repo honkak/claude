@@ -29,8 +29,9 @@ window.APP_CONFIG = {
   // 오늘 보고를 쓸 때, 며칠 전 보고까지 거슬러 올라가 미완료 업무를 이월할지
   CARRY_LOOKBACK_DAYS: 14,
 
-  // '쉬고 있는 내 과제'(끝나지 않았지만 오늘 목록에 없는 과제)를 며칠 전까지 찾아 보여줄지
-  RESUME_LOOKBACK_DAYS: 180,
+  // 조회 기준일: 매년 이 날짜(월-일)부터 오늘까지를 '올해 데이터'로 읽는다
+  // 쉬고 있는 내 과제, 지난 업무 불러오기(기본), 내 현황, 대시보드가 모두 이 기준을 쓴다
+  YEAR_START: '01-01',
 
   // 며칠 전 보고까지 수정을 허용할지 (0 = 오늘 것만 수정 가능)
   EDIT_PAST_DAYS: 0,
@@ -48,6 +49,6 @@ window.APP_CONFIG = {
   // 팀장용 과제관리 대시보드 (dashboard/ 폴더)
   DASHBOARD: {
     TAB_IN_MAIN_APP: true, // false면 일반 화면에서 대시보드 탭을 숨김 (dashboard/index.html 단독 페이지는 그대로 사용)
-    DEFAULT_WEEKS: 8, // 처음 보여줄 기간(주)
+    DEFAULT_WEEKS: 0, // 처음 보여줄 기간: 0 = 올해(1월 1일부터), 4·8·12 = 최근 N주
   },
 };

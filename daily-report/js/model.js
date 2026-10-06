@@ -103,6 +103,34 @@
 
   DR.model = M;
 
+  /* ── 올해 데이터 (기준일: 매년 1월 1일) ──
+   * 이월·쉬는 과제·불러오기·내 현황·대시보드는 모두 '올해 1월 1일 ~ 오늘' 데이터를 함께 쓴다.
+   * 한 번 읽은 것을 잠시(60초) 재사용하고, 저장하면 비운다 → 저장소 조회 횟수를 줄인다.
+   */
+  M.yearStart = (date = DR.today()) => `${String(date).slice(0, 4)}-${cfg().YEAR_START || '01-01'}`;
+
+  const yearCache = new WeakMap(); // store → { year, at, rows, promise }
+  M.invalidate = (store) => (store ? yearCache.delete(store) : null);
+  M.yearRows = async (store, { force = false } = {}) => {
+    const today = DR.today();
+    const from = M.yearStart(today);
+    const c = yearCache.get(store);
+    if (!force && c && c.from === from && Date.now() - c.at < 60000) return c.promise;
+    const promise = store.list({ from, to: today });
+    yearCache.set(store, { from, at: Date.now(), promise });
+    promise.catch(() => yearCache.delete(store));
+    return promise;
+  };
+  // from~to 구간 보고. 올해 안이면 공유 데이터에서 거르고, 작년까지 걸치면 저장소에서 직접 읽는다
+  M.rangeRows = async (store, from, to) => {
+    const today = DR.today();
+    if (from && from >= M.yearStart(today) && (!to || to <= today)) {
+      const rows = await M.yearRows(store);
+      return rows.filter((r) => r.date >= from && (!to || r.date <= to));
+    }
+    return store.list({ from, to });
+  };
+
   // 설정에 따라 저장소를 고른다 (store-*.js가 먼저 로드되어 있어야 함)
   DR.createStore = () => (cfg().STORE === 'goodocs' ? DR.createGoodocsStore() : DR.createMockStore());
 })(window.DR);
