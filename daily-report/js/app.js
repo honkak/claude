@@ -909,7 +909,7 @@
       .join('');
     return `<table class="sheet sheet-day">
       <thead><tr class="letters"><th class="corner"></th>${cols.map((_, i) => `<th>${'ABCDEFGH'[i]}</th>`).join('')}</tr>
-      <tr><th class="corner"></th>${cols.map((c) => `<th>${c}</th>`).join('')}</tr></thead>
+      <tr><th class="corner"></th>${cols.map((c) => `<th${c === '진행율' ? ' class="c"' : ''}>${c}</th>`).join('')}</tr></thead>
       <tbody>${body}</tbody></table>`;
   }
 
@@ -1051,7 +1051,7 @@
         { header: '과제번호', width: 15 },
         { header: '제목', width: 32 },
         { header: '내용', width: 60 },
-        { header: '진행율', width: 9 },
+        { header: '진행율', width: 9, align: 'center' },
         { header: '비고', width: 24 },
         { header: '담당자', width: 16 },
         { header: '작성자', width: 9 },

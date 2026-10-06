@@ -323,7 +323,7 @@
         return t.idle ? `${t.idle}일째 변화 없음` : '오늘 갱신';
       };
       ref('table').innerHTML = `<table class="sheet dash-table">
-        <thead><tr><th>상태</th><th>과제번호</th><th>소속파트</th><th>제목</th><th>담당자</th><th>진행율</th><th>등록일</th><th>최근 보고</th><th>진행율 변화</th></tr></thead>
+        <thead><tr><th>상태</th><th>과제번호</th><th>소속파트</th><th>제목</th><th>담당자</th><th class="c">진행율</th><th>등록일</th><th>최근 보고</th><th>진행율 변화</th></tr></thead>
         <tbody>${
           list
             .map(
@@ -351,12 +351,12 @@
       ref('histBody').innerHTML = `
         <p class="meta">${DR.esc(t.part)} · 담당 ${DR.esc(t.owners.join(', '))} · 등록 ${DR.shortDate(t.registered)} · 현재 ${STATUS[t.status].label}</p>
         <div class="grid-wrap"><table class="sheet">
-          <thead><tr><th>날짜</th><th>진행율</th><th>내용</th><th>비고</th><th>수정자</th></tr></thead>
+          <thead><tr><th>날짜</th><th class="c">진행율</th><th>내용</th><th>비고</th><th>수정자</th></tr></thead>
           <tbody>${[...t.history]
             .reverse()
             .map(
               (r) => `<tr><td class="num nowrap">${DR.shortDate(r.date)} (${DR.weekdayName(r.date)})</td>
-                <td class="nowrap">${DR.esc(r.progress)}</td>
+                <td class="prog">${DR.esc(r.progress)}</td>
                 <td class="content">${DR.esc(r.content)}</td>
                 <td class="note">${DR.esc(r.note)}</td>
                 <td class="nowrap">${DR.esc(r.editor || r.author)}</td></tr>`

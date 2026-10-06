@@ -605,7 +605,11 @@ select.unset { color: var(--muted); }
 .sheet td.title { min-width: 200px; font-weight: 600; }
 .sheet td.content { min-width: 320px; }
 .sheet td.note { min-width: 140px; color: var(--warn); }
-.sheet td.prog { width: 1%; white-space: nowrap; }
+.sheet td.prog { width: 1%; white-space: nowrap; text-align: center; }
+.sheet th.c { text-align: center; }
+/* 진행율은 어디서나 가운데 정렬 */
+.entry [data-f="progress"] { text-align: center; }
+.entry-head span:nth-child(5) { text-align: center; }
 .sheet td.prog b, .ptext { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 12px; margin-left: 6px; }
 .ptext { margin-left: 0; }
 .sheet td.time { width: 1%; white-space: nowrap; color: var(--muted); font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 12px; }

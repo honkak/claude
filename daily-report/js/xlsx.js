@@ -2,7 +2,7 @@
  * 외부 라이브러리 없이 .xlsx(엑셀) 파일을 만든다.
  * 사내망에서 CDN을 못 쓰는 경우를 위해 압축 없이(zip 'stored') 직접 묶는다.
  *
- * DR.buildXlsx({ sheetName, columns: [{ header, width }], rows: [[...], ...] }) → Uint8Array
+ * DR.buildXlsx({ sheetName, columns: [{ header, width, align? }], rows: [[...], ...] }) → Uint8Array  (align: 'center')
  * DR.saveFile(filename, data, mime) → 브라우저 다운로드
  */
 (function (DR) {
@@ -95,7 +95,7 @@
   const NS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
   const NS_PR = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
-  // 스타일: 0 기본 / 1 머리글(굵게·회색 바탕·가운데) / 2 본문(테두리·줄바꿈·위 정렬)
+  // 스타일: 0 기본 / 1 머리글(굵게·회색 바탕·가운데) / 2 본문(테두리·줄바꿈·위 정렬) / 3 본문 가운데 정렬
   const STYLES =
     HEAD +
     `<styleSheet xmlns="${NS}">` +
@@ -106,9 +106,10 @@
     '<border><left style="thin"><color rgb="FFB7C3BD"/></left><right style="thin"><color rgb="FFB7C3BD"/></right>' +
     '<top style="thin"><color rgb="FFB7C3BD"/></top><bottom style="thin"><color rgb="FFB7C3BD"/></bottom><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+    '<cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
     '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
-    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top" wrapText="1"/></xf></cellXfs>' +
     '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
 
   DR.buildXlsx = ({ sheetName = 'Sheet1', columns, rows }) => {
@@ -118,7 +119,7 @@
     const cell = (v, r, c, s) => `<c r="${colName(c)}${r}" t="inlineStr" s="${s}"><is><t xml:space="preserve">${xml(v)}</t></is></c>`;
     const sheetRows = [
       `<row r="1">${columns.map((col, c) => cell(col.header, 1, c, 1)).join('')}</row>`,
-      ...rows.map((row, i) => `<row r="${i + 2}">${row.map((v, c) => cell(v, i + 2, c, 2)).join('')}</row>`),
+      ...rows.map((row, i) => `<row r="${i + 2}">${row.map((v, c) => cell(v, i + 2, c, columns[c] && columns[c].align === 'center' ? 3 : 2)).join('')}</row>`),
     ].join('');
     const sheet =
       HEAD +

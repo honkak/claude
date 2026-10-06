@@ -114,7 +114,7 @@
           <section class="block">
             <header class="block-head"><h2>내 과제 전체</h2><span class="meta">진행 중 과제와 최근 2주 안에 완료한 과제</span></header>
             <div class="grid-wrap"><table class="sheet ms-table">
-              <thead><tr><th>상태</th><th>과제번호</th><th>제목</th><th>진행율</th><th>최근 보고</th><th>진행율 변화</th><th>정체까지</th><th></th></tr></thead>
+              <thead><tr><th>상태</th><th>과제번호</th><th>제목</th><th class="c">진행율</th><th>최근 보고</th><th>진행율 변화</th><th>정체까지</th><th></th></tr></thead>
               <tbody>${
                 visible
                   .map(
@@ -122,7 +122,7 @@
                       <td>${pill(t)}</td>
                       <td class="tid-cell">${DR.esc(t.id)}</td>
                       <td class="title">${DR.esc(firstLine(t.title))}</td>
-                      <td class="nowrap">${DR.esc(t.progress)}</td>
+                      <td class="prog">${DR.esc(t.progress)}</td>
                       <td class="nowrap">${DR.shortDate(t.lastSeen)}</td>
                       <td class="nowrap">${t.status === 'done' ? `${DR.shortDate(t.doneDate)} 완료` : t.idle ? `${t.idle}일째 그대로` : '오늘 갱신'}</td>
                       <td class="nowrap">${t.status === 'done' ? '-' : t.stallIn > 0 ? `${t.stallIn}일 남음` : '정체 중'}</td>
