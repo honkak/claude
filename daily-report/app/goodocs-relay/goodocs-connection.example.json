@@ -1,9 +1,0 @@
-{
-  "_설명": "이 파일을 복사해 같은 폴더에 goodocs-connection.json 으로 저장한 뒤 값을 채우세요. goodocs-connection.json 은 Git에 올라가지 않습니다.",
-  "BASE_URL": "http://(사내 Goodocs 주소)/api/v2/gooddocs",
-  "USER_ID": "사번",
-  "DOC_ID": "Goodocs 시트 ID",
-  "TOKEN_SOURCE": "GDER",
-  "TOKEN_KEY": "발급받은 토큰 키",
-  "PORT": 8787
-}
