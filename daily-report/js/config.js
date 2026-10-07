@@ -16,14 +16,14 @@ window.APP_CONFIG = {
   // 과제번호 앞에 붙는 파트 코드 (예: P1-261005-01). 목록에 없는 파트는 'ETC'
   PART_CODES: { '1파트': 'P1', '2파트': 'P2', '3파트': 'P3', '변전파트': 'SS' },
 
-  // 저장소 선택: 'mock' = 예시 데이터(이 브라우저에만 저장), 'goodocs' = 사내 goodocs 시트
+  // 저장소: 'mock' = 예시 데이터(이 브라우저에만 저장) / 'goodocs' = 사내 Goodocs 시트
+  // server/start.bat 으로 실행하면 자동으로 Goodocs를 쓴다 (여기 값과 상관없이)
   STORE: 'mock',
 
+  // Goodocs 연결 — 사번·시트 ID·토큰은 여기가 아니라 server/goodocs.config.json 에 넣는다 (브라우저에 노출 안 됨)
   GOODOCS: {
-    ENDPOINT: 'https://goodocs.example.local/api/v1', // 사내 goodocs API 주소
-    TOKEN: '',                                        // 발급받은 토큰
-    DOC_ID: '',                                       // 문서(스프레드시트) ID
-    SHEET_NAME: '일일업무',                            // 시트(탭) 이름
+    API_BASE: '/api', // 중계 서버(start.ps1) 주소. 보통 바꿀 필요 없음
+    UPDATE_KEY: 'ROW_ID', // 행 수정 시 찾는 기준: 'ROW_ID'(권장) 또는 'ROW_INDEX'
   },
 
   // 오늘 보고를 쓸 때, 며칠 전 보고까지 거슬러 올라가 미완료 업무를 이월할지

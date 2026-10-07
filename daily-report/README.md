@@ -150,46 +150,67 @@ daily-report/
 ├── index.html            일반 화면 (내 업무 입력 · 내 현황 · 팀 현황 · 대시보드 탭)
 ├── css/style.css         디자인 (라이트·다크, 휴대폰 대응)
 ├── js/
-│   ├── config.js         ★ 팀 이름, 팀원, 소속파트, 저장소, goodocs 주소·토큰, 대시보드 설정
+│   ├── config.js         ★ 팀 이름, 팀원, 소속파트, 조회 기준, 대시보드 설정 (토큰은 여기 넣지 않음)
 │   ├── util.js           날짜·과제번호·알림 등 공통 함수
 │   ├── model.js          완료·담당자·파트·과제 상태 판단 규칙 (일반 화면과 대시보드가 공유)
 │   ├── store-mock.js     예시 저장소 (브라우저에만 저장, 체험용)
-│   ├── store-goodocs.js  ★ goodocs 연결부
+│   ├── store-goodocs.js  Goodocs 저장소 (중계 서버 /api 호출)
 │   ├── xlsx.js           엑셀(.xlsx) 파일 만들기·내려받기
 │   ├── app.js            입력·팀 현황 화면 동작
 │   └── my-status.js      내 현황 (구성원용)
+├── server/               Goodocs 중계 서버 (각자 PC에서 실행)
+│   ├── start.bat         ★ 더블클릭 실행
+│   ├── start.ps1         웹서버 + Goodocs 중계 (Windows PowerShell 5.1)
+│   └── goodocs.config.example.json  접속 정보 양식 → goodocs.config.json 으로 복사해 채움 (Git 제외)
 └── dashboard/            팀장용 과제관리 대시보드 (독립 모듈)
     ├── index.html        팀장 전용 단독 페이지
     ├── dashboard.js
     └── dashboard.css
 ```
 
-## 8. 사내 goodocs 연결 방법
+## 8. 사내 Goodocs 연결 방법
 
-1. **시트 준비**: goodocs에 문서를 만들고, 시트(탭) 이름을 `일일업무`로 정합니다. 1행에 3번 항목의 열 이름 12개를 입력합니다.
-2. **설정 입력** (`js/config.js`)
-   ```js
-   STORE: 'goodocs',
-   GOODOCS: {
-     ENDPOINT: 'https://사내-goodocs-주소/api/...',
-     TOKEN: '발급받은 토큰',
-     DOC_ID: '문서 ID',
-     SHEET_NAME: '일일업무',
-   },
-   MEMBERS: ['실제', '팀원', '이름'],
+Goodocs 조회 API는 **GET 요청에 JSON 본문**을 싣는 방식이라 브라우저가 직접 부를 수 없습니다. 그래서 각자 PC에서 작은 **중계 서버(`server/start.ps1`)**를 띄워 씁니다. 이 중계 서버가 화면 파일을 내보내고, 인증 정보를 붙여 Goodocs로 전달합니다. **토큰은 PC의 설정 파일에만 있고 브라우저로 가지 않습니다.**
+
+```
+start.bat 더블클릭 → 크롬이 http://localhost:8787 로 열림 → 평소처럼 사용 (창을 닫으면 종료)
+```
+
+### 처음 한 번 설정
+1. **Goodocs 시트 준비**: 1행(머리글)에 아래 12개 열 이름을 그대로 입력합니다.
+   `과제번호 | 날짜 | 작성자 | 소속파트 | 제목 | 내용 | 진행율 | 비고 | 담당자 | 수정자 | 작성시각 | 수정시각`
+2. **접속 정보 입력**: `server/goodocs.config.example.json`을 복사해 같은 폴더에 **`goodocs.config.json`**으로 저장하고 값을 채웁니다.
+   ```json
+   {
+     "BASE_URL": "http://(사내 Goodocs 주소)/api/v2/gooddocs",
+     "USER_ID": "사번",
+     "DOC_ID": "Goodocs 시트 ID",
+     "TOKEN_SOURCE": "GDER",
+     "TOKEN_KEY": "발급받은 토큰 키",
+     "PORT": 8787
+   }
    ```
-3. **호출 함수 맞추기** (`js/store-goodocs.js`)
-   - 파일 위쪽 주석에 **가정한 API 형식**이 적혀 있습니다. 실제 goodocs API와 다르면 아래 세 곳만 고칩니다.
-   - `[1] goodocsRequest`: 사내에 엔드포인트와 토큰을 넣어 호출하는 코드가 있다면 이 함수 본문을 그 코드로 바꿉니다.
-   - `[2] COLUMNS`: 시트 열 이름을 바꿨다면 여기를 맞춥니다.
-   - `[3] fromRecord / recordsOf` 및 `list/create/update/remove`의 경로: 응답 모양과 URL 경로를 맞춥니다.
-4. **확인**: 입력 화면에서 한 건을 저장한 뒤 goodocs 시트에 행이 생기는지, 팀 현황에 보이는지 확인합니다.
+   - 이 파일은 `.gitignore`로 막혀 있어 Git에 올라가지 않습니다. 중계 서버도 이 폴더(`server/`)의 파일은 브라우저에 내보내지 않습니다.
+3. **실행**: `server/start.bat` 더블클릭. 화면 오른쪽 위 배지가 **"Goodocs 연결"**로 바뀌면 연결된 것입니다.
+   (예시 데이터로 체험할 때처럼 `index.html`을 직접 열면 계속 예시 데이터로 동작합니다.)
 
-### 연결할 때 주의할 점
-- **토큰 노출**: 브라우저에서 직접 호출하므로 토큰이 화면 소스에 보입니다. 팀 내부 전용 토큰(해당 시트만 읽기·쓰기 권한)을 쓰시고, 가능하면 사내 프록시를 거치게 하세요.
-- **CORS**: 브라우저에서 goodocs API를 직접 부를 수 없다면(CORS 차단), 사내 웹서버에 간단한 중계 API를 두고 `ENDPOINT`를 그 주소로 바꿉니다.
-- **작성자 확인**: 지금은 이름을 목록에서 고르는 방식이라 다른 사람 이름으로도 입력할 수 있습니다. goodocs나 사내 SSO에서 로그인 사용자를 알 수 있으면 그 값으로 작성자를 고정하는 것을 권장합니다.
-- **조회 필터**: `list`는 `from`, `to`, `author` 조건을 보냅니다. 서버가 필터를 지원하지 않아도 화면에서 다시 거르므로 결과는 맞습니다. 다만 데이터가 쌓이면 느려질 수 있어 서버 필터 지원을 권장합니다.
+### 동작 방식 (Python 예제 코드와 같은 호출)
+| 화면 동작 | Goodocs 호출 |
+|---|---|
+| 조회 | `GET {BASE_URL}/{DOC_ID}` 본문 `{인증, ROW_INDEX}` — 1부터 5000건씩 빈 응답이 올 때까지 (`read_all`) |
+| 새 업무 저장 | `POST` 본문 `{인증, ROW_DATA: {열: 값}}` — 맨 아래 행 추가 |
+| 수정 | `PUT` 본문 `{인증, ROW_DATA: 원래 행 전체 + 바뀐 값, ROW_ID}` — 다른 열 값이 지워지지 않게 원래 행 전체를 보냄 |
+| 삭제 | `DELETE {BASE_URL}/{DOC_ID}/{ROW_ID}` 본문 `{인증}` |
+
+- Goodocs에는 날짜 조건 조회가 없어 전체를 읽고 화면에서 거릅니다. 여러 화면이 한 번 읽은 데이터를 60초간 함께 씁니다.
+- 수정할 때 행을 찾는 기준은 기본 `ROW_ID`입니다(삭제로 `ROW_INDEX`가 밀려도 안전). `config.js`의 `GOODOCS.UPDATE_KEY`를 `'ROW_INDEX'`로 바꿀 수 있습니다.
+
+### 요구 사항과 주의
+- **Windows PowerShell 5.1**(윈도우 기본 탑재) 이상. 관리자 권한은 필요 없습니다(이 PC 안 `127.0.0.1`에서만 열림).
+- 회사 보안 정책으로 ps1 실행이 막혀 있으면 `start.bat`이 실행되지 않습니다. 이 경우 IT 담당자에게 확인이 필요합니다.
+- Goodocs 주소가 `https://`이면 PowerShell 5.1에서는 조회(GET+본문)를 보낼 수 없습니다. 현재 주소 형식(`http://`)에서는 문제없습니다.
+- 사람마다 자기 PC에서 `start.bat`을 실행합니다. 같은 Goodocs 시트를 쓰므로 데이터는 팀 전체가 공유됩니다.
+- 토큰이 하나(공용)라면 Goodocs 쪽 기록에는 모두 같은 사번으로 남습니다. 작성자·수정자는 이 앱이 시트 열에 따로 기록합니다.
 
 ## 9. 다음 단계 후보
 

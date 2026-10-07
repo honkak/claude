@@ -145,5 +145,9 @@
   };
 
   // 설정에 따라 저장소를 고른다 (store-*.js가 먼저 로드되어 있어야 함)
-  DR.createStore = () => (cfg().STORE === 'goodocs' ? DR.createGoodocsStore() : DR.createMockStore());
+  // server/start.ps1 로 열면 window.APP_RUNTIME.store = 'goodocs' 가 주어져 자동으로 Goodocs를 쓴다
+  DR.createStore = () => {
+    const which = (window.APP_RUNTIME && window.APP_RUNTIME.store) || cfg().STORE;
+    return which === 'goodocs' ? DR.createGoodocsStore() : DR.createMockStore();
+  };
 })(window.DR);
