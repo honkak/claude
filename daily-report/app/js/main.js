@@ -38,7 +38,7 @@
     $('#member-list').innerHTML = knownNames().map((m) => `<option value="${DR.esc(m)}">`).join('');
   }
 
-  // 데이터 해석 규칙은 js/model.js에서 (팀장 대시보드와 공유)
+  // 데이터 해석 규칙은 js/task-rules.js에서 (팀장 대시보드와 공유)
   const { byTime, percentOf, isDone, splitOwners, ownersOf, NO_PART, partOf, partList, byOwner } = DR.model;
   const isBlank = (r) => !r.title.trim() && !r.content.trim();
   // 내가 작성했거나 담당자로 들어간 과제 → 내 입력 화면에 보이고 수정할 수 있다
@@ -59,7 +59,7 @@
     else extraTabs.get(tab)?.show?.();
   }
 
-  /* ── 바깥 모듈이 탭을 붙이는 자리 (예: dashboard/dashboard.js) ──
+  /* ── 바깥 모듈이 탭을 붙이는 자리 (예: leader-dashboard/leader-dashboard.js) ──
    * 기본 화면은 이 모듈들을 몰라도 동작한다. 모듈 스크립트를 빼면 탭도 사라진다.
    * DR.registerTab({ id, label, mount(viewEl, { store, cfg }), show(), before? })
    *   before: 이 탭 id 앞에 끼워 넣기 (없으면 맨 뒤)

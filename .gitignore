@@ -1,2 +1,2 @@
 # Goodocs 접속 정보(사번·토큰)는 PC에만 둔다 — 절대 커밋하지 않음
-daily-report/server/goodocs.config.json
+daily-report/app/goodocs-relay/goodocs-connection.json

@@ -1,8 +1,8 @@
 /*
  * 내 현황 (구성원용)
- * 팀장 대시보드와 같은 기준(js/model.js의 TASK_RULES)으로 내 과제를 계산해,
+ * 팀장 대시보드와 같은 기준(js/task-rules.js의 TASK_RULES)으로 내 과제를 계산해,
  * 팀장 화면에 '정체'로 뜨기 전에 본인이 먼저 확인하고 손볼 수 있게 한다.
- * 일반 화면의 기능이며, 팀장 대시보드(dashboard/)를 떼어내도 그대로 동작한다.
+ * 일반 화면의 기능이며, 팀장 대시보드(leader-dashboard/)를 떼어내도 그대로 동작한다.
  */
 (function (DR) {
   if (typeof DR.registerTab !== 'function') return;

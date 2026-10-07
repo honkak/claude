@@ -17,12 +17,12 @@ window.APP_CONFIG = {
   PART_CODES: { '1파트': 'P1', '2파트': 'P2', '3파트': 'P3', '변전파트': 'SS' },
 
   // 저장소: 'mock' = 예시 데이터(이 브라우저에만 저장) / 'goodocs' = 사내 Goodocs 시트
-  // server/start.bat 으로 실행하면 자동으로 Goodocs를 쓴다 (여기 값과 상관없이)
+  // start-daily-report.bat 으로 실행하면 자동으로 Goodocs를 쓴다 (여기 값과 상관없이)
   STORE: 'mock',
 
-  // Goodocs 연결 — 사번·시트 ID·토큰은 여기가 아니라 server/goodocs.config.json 에 넣는다 (브라우저에 노출 안 됨)
+  // Goodocs 연결 — 사번·시트 ID·토큰은 여기가 아니라 goodocs-relay/goodocs-connection.json 에 넣는다 (브라우저에 노출 안 됨)
   GOODOCS: {
-    API_BASE: '/api', // 중계 서버(start.ps1) 주소. 보통 바꿀 필요 없음
+    API_BASE: '/api', // 중계 서버(goodocs-relay-server.ps1) 주소. 보통 바꿀 필요 없음
     UPDATE_KEY: 'ROW_ID', // 행 수정 시 찾는 기준: 'ROW_ID'(권장) 또는 'ROW_INDEX'
   },
 
@@ -49,9 +49,9 @@ window.APP_CONFIG = {
     NO_REPORT_DAYS: 7, // 끝나지 않은 과제가 이 일수 이상 보고되지 않으면 '내 현황'에서 알림
   },
 
-  // 팀장용 과제관리 대시보드 (dashboard/ 폴더)
+  // 팀장용 과제관리 대시보드 (leader-dashboard/ 폴더)
   DASHBOARD: {
-    TAB_IN_MAIN_APP: true, // false면 일반 화면에서 대시보드 탭을 숨김 (dashboard/index.html 단독 페이지는 그대로 사용)
+    TAB_IN_MAIN_APP: true, // false면 일반 화면에서 대시보드 탭을 숨김 (leader-dashboard/index.html 단독 페이지는 그대로 사용)
     DEFAULT_WEEKS: 0, // 처음 보여줄 기간: 0 = 올해(1월 1일부터), 4·8·12 = 최근 N주
   },
 };

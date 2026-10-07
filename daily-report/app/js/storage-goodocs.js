@@ -1,10 +1,10 @@
 /*
  * Goodocs 저장소 어댑터
  *
- * 화면은 Goodocs를 직접 부르지 않고, 같은 PC에서 도는 중계 서버(server/start.ps1)를 부른다.
+ * 화면은 Goodocs를 직접 부르지 않고, 같은 PC에서 도는 중계 서버(goodocs-relay/goodocs-relay-server.ps1)를 부른다.
  * 중계 서버가 인증 정보(사번·토큰)를 붙여 Goodocs API로 전달한다. 토큰은 브라우저로 오지 않는다.
  *
- *   화면                         중계 서버(start.ps1)             Goodocs API ({BASE_URL}/{DOC_ID})
+ *   화면                         중계 서버(goodocs-relay-server.ps1)             Goodocs API ({BASE_URL}/{DOC_ID})
  *   GET    /api/rows          →  GET  {인증, ROW_INDEX} 5000건씩 반복 (read_all)
  *   POST   /api/rows  {행}    →  POST {인증, ROW_DATA: 행}           (create: 맨 아래에 행 추가)
  *   PUT    /api/rows  {행}    →  PUT  {인증, ROW_DATA: 행}           (update: ROW_ID로 찾아 수정)
@@ -26,7 +26,7 @@
         cache: 'no-store',
       });
     } catch (e) {
-      throw new Error('중계 서버(start.ps1)에 연결하지 못했습니다. start.bat 창이 켜져 있는지 확인하세요.');
+      throw new Error('중계 서버(goodocs-relay-server.ps1)에 연결하지 못했습니다. start-daily-report.bat 창이 켜져 있는지 확인하세요.');
     }
     const text = await res.text();
     let data = null;
@@ -128,11 +128,11 @@
 
       checkConfig() {
         if (location.protocol === 'file:')
-          return 'Goodocs에 연결하려면 server 폴더의 start.bat 으로 실행하세요. (파일을 직접 열면 저장되지 않습니다)';
+          return 'Goodocs에 연결하려면 start-daily-report.bat 으로 실행하세요. (파일을 직접 열면 저장되지 않습니다)';
         return '';
       },
 
-      // Goodocs는 조건 조회가 없어 전체를 읽고 화면에서 거른다 (같은 데이터는 model.js가 잠시 재사용)
+      // Goodocs는 조건 조회가 없어 전체를 읽고 화면에서 거른다 (같은 데이터는 task-rules.js가 잠시 재사용)
       async list({ from, to, author } = {}) {
         const rows = await readAll();
         return rows.filter((r) => (!from || r.date >= from) && (!to || r.date <= to) && (!author || r.author === author));

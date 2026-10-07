@@ -2,13 +2,13 @@
  * 팀장용 과제관리 대시보드 (독립 모듈)
  *
  * 일반 화면과 분리해 둔 모듈입니다. 필요한 것은 아래뿐입니다.
- *   js/config.js, js/util.js, js/model.js, js/store-*.js  (공통)
- *   dashboard/dashboard.js, dashboard/dashboard.css       (이 모듈)
+ *   js/settings.js, js/common.js, js/task-rules.js, js/storage-*.js  (공통)
+ *   leader-dashboard/leader-dashboard.js, leader-dashboard/leader-dashboard.css       (이 모듈)
  *
  * 쓰는 방법 두 가지
  *   1) 일반 화면의 탭으로: index.html에 이 파일과 css를 넣으면 '대시보드' 탭이 생깁니다.
- *      (config.js의 DASHBOARD.TAB_IN_MAIN_APP = false 이면 탭을 만들지 않습니다)
- *   2) 팀장 전용 페이지로: dashboard/index.html 을 엽니다.
+ *      (settings.js의 DASHBOARD.TAB_IN_MAIN_APP = false 이면 탭을 만들지 않습니다)
+ *   2) 팀장 전용 페이지로: leader-dashboard/index.html 을 엽니다.
  *
  * 보고 데이터를 읽기만 하고, 쓰지 않습니다.
  */
@@ -24,7 +24,7 @@
     done: { label: '완료', mark: '✓' },
   };
 
-  // 과제 상태 판단은 공통 규칙(js/model.js)을 쓴다
+  // 과제 상태 판단은 공통 규칙(js/task-rules.js)을 쓴다
   const buildTasks = (rows, today) => M.buildTasks(rows, today);
   const stallDays = () => M.rules().STALL_DAYS;
 

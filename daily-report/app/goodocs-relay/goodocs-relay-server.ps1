@@ -4,10 +4,10 @@
 #  하는 일
 #   1) 이 PC에 작은 웹서버를 띄우고 크롬으로 화면을 연다 (http://localhost:8787)
 #   2) 화면의 저장·조회 요청을 Goodocs API로 대신 전달한다
-#      - 토큰은 이 PC의 goodocs.config.json 에만 있고, 브라우저로는 보내지 않는다
+#      - 토큰은 이 PC의 goodocs-connection.json 에만 있고, 브라우저로는 보내지 않는다
 #      - Goodocs 조회는 'GET + JSON 본문' 방식이라 브라우저가 직접 부를 수 없어서 이 중계가 필요하다
 #
-#  실행: start.bat 더블클릭  (또는  powershell -ExecutionPolicy Bypass -File start.ps1)
+#  실행: start-daily-report.bat 더블클릭  (또는  powershell -ExecutionPolicy Bypass -File goodocs-relay-server.ps1)
 #  종료: 이 창에서 Ctrl+C 또는 창 닫기
 #  관리자 권한 필요 없음 (이 PC 안에서만 접속 가능: 127.0.0.1)
 # =====================================================================
@@ -17,15 +17,15 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
-$ServerDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$AppDir = Split-Path -Parent $ServerDir
-$ConfigPath = Join-Path $ServerDir 'goodocs.config.json'
+$RelayDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$AppDir = Split-Path -Parent $RelayDir
+$ConfigPath = Join-Path $RelayDir 'goodocs-connection.json'
 
 if (-not (Test-Path $ConfigPath)) {
   Write-Host ''
-  Write-Host '[설정 없음] goodocs.config.json 파일이 없습니다.' -ForegroundColor Yellow
-  Write-Host "  1) $ServerDir 폴더의 goodocs.config.example.json 을 복사해"
-  Write-Host '     같은 폴더에 goodocs.config.json 으로 저장하세요.'
+  Write-Host '[설정 없음] goodocs-connection.json 파일이 없습니다.' -ForegroundColor Yellow
+  Write-Host "  1) $RelayDir 폴더의 goodocs-connection.example.json 을 복사해"
+  Write-Host '     같은 폴더에 goodocs-connection.json 으로 저장하세요.'
   Write-Host '  2) USER_ID(사번), DOC_ID(시트 ID), TOKEN_KEY 를 입력한 뒤 다시 실행하세요.'
   Read-Host '엔터를 누르면 닫힙니다'
   exit 1
@@ -34,7 +34,7 @@ if (-not (Test-Path $ConfigPath)) {
 $Config = Get-Content $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
 foreach ($k in 'BASE_URL', 'USER_ID', 'DOC_ID', 'TOKEN_SOURCE', 'TOKEN_KEY') {
   if (-not $Config.$k) {
-    Write-Host "[설정 오류] goodocs.config.json 의 $k 값이 비어 있습니다." -ForegroundColor Red
+    Write-Host "[설정 오류] goodocs-connection.json 의 $k 값이 비어 있습니다." -ForegroundColor Red
     Read-Host '엔터를 누르면 닫힙니다'
     exit 1
   }
@@ -230,10 +230,10 @@ function Handle-Static($Stream, $Req) {
   if (-not $rel) { $rel = 'index.html' }
   $full = [System.IO.Path]::GetFullPath((Join-Path $AppDir $rel))
   $appRoot = [System.IO.Path]::GetFullPath($AppDir).TrimEnd('\', '/')
-  $serverRoot = [System.IO.Path]::GetFullPath($ServerDir).TrimEnd('\', '/')
-  # 앱 폴더 밖이나 server 폴더(토큰이 든 설정 파일)는 절대 내보내지 않는다
+  $relayRoot = [System.IO.Path]::GetFullPath($RelayDir).TrimEnd('\', '/')
+  # 앱 폴더 밖이나 goodocs-relay 폴더(토큰이 든 접속 정보 파일)는 절대 내보내지 않는다
   if (-not $full.StartsWith($appRoot, [System.StringComparison]::OrdinalIgnoreCase) -or
-      $full.StartsWith($serverRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+      $full.StartsWith($relayRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     return Send-Error $Stream 403 '접근할 수 없는 경로입니다.'
   }
   if (-not (Test-Path $full -PathType Leaf)) { return Send-Error $Stream 404 '파일이 없습니다.' }

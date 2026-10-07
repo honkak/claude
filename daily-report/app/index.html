@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>팀 일일업무보고</title>
 <link rel="stylesheet" href="css/style.css">
-<!-- [팀장용 대시보드] 분리할 때 이 줄과 아래 dashboard.js 줄을 지우면 됩니다 -->
-<link rel="stylesheet" href="dashboard/dashboard.css">
+<!-- [팀장용 대시보드] 분리할 때 이 줄과 아래 leader-dashboard.js 줄을 지우면 됩니다 -->
+<link rel="stylesheet" href="leader-dashboard/leader-dashboard.css">
 </head>
 <body>
 <div class="app">
@@ -188,16 +188,16 @@
   </div>
 </div>
 
-<script src="js/config.js"></script>
-<!-- APP_RUNTIME: server/start.bat 으로 실행하면 이 자리에 Goodocs 연결 설정이 들어간다 -->
-<script src="js/util.js"></script>
-<script src="js/model.js"></script>
-<script src="js/store-mock.js"></script>
-<script src="js/store-goodocs.js"></script>
-<script src="js/xlsx.js"></script>
-<script src="js/app.js"></script>
-<script src="js/my-status.js"></script>
-<!-- [팀장용 대시보드] 대시보드 탭 (dashboard/ 폴더의 독립 모듈) -->
-<script src="dashboard/dashboard.js"></script>
+<script src="js/settings.js"></script>
+<!-- APP_RUNTIME: start-daily-report.bat 으로 실행하면 이 자리에 Goodocs 연결 설정이 들어간다 -->
+<script src="js/common.js"></script>
+<script src="js/task-rules.js"></script>
+<script src="js/storage-sample-data.js"></script>
+<script src="js/storage-goodocs.js"></script>
+<script src="js/excel-export.js"></script>
+<script src="js/main.js"></script>
+<script src="js/tab-my-status.js"></script>
+<!-- [팀장용 대시보드] 대시보드 탭 (leader-dashboard/ 폴더의 독립 모듈) -->
+<script src="leader-dashboard/leader-dashboard.js"></script>
 </body>
 </html>
